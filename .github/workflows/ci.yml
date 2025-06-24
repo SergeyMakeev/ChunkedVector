@@ -122,7 +122,7 @@ jobs:
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v1.14
         with:
-          cmake-version: '3.20'
+          cmake-version: '3.25'
 
       - name: Set Environment Variables (Linux/macOS)
         if: runner.os != 'Windows'
@@ -193,7 +193,7 @@ jobs:
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v1.14
         with:
-          cmake-version: '3.20'
+          cmake-version: '3.25'
 
       - name: Configure CMake with Coverage
         run: |
@@ -251,7 +251,7 @@ jobs:
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v1.14
         with:
-          cmake-version: '3.20'
+          cmake-version: '3.25'
 
       - name: Configure CMake with ${{ matrix.sanitizer }} Sanitizer
         run: |
