@@ -504,14 +504,14 @@ TEST_F(ChunkedVectorTest, Reserve) {
 
 TEST_F(ChunkedVectorTest, ShrinkToFit) {
     chunked_vector<int> vec;
-    vec.reserve(2048);  // Reserve multiple pages
+    vec.reserve(chunked_vector<int>::page_size() * 2); // Reserve multiple pages
     
     for (int i = 0; i < 10; ++i) {
         vec.push_back(i);
     }
     
     size_t capacity_before = vec.capacity();
-    EXPECT_GE(capacity_before, 2048);
+    EXPECT_GE(capacity_before, chunked_vector<int>::page_size() * 2);
     
     vec.shrink_to_fit();
     // After shrink_to_fit, capacity should be at least the size, but may not be dramatically smaller
