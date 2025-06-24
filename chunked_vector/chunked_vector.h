@@ -499,7 +499,8 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             return;
         }
 
-        size_type new_page_capacity = m_page_capacity > 0 ? m_page_capacity + (m_page_capacity >> 1) : 4;
+        // 8, 16, 32, 64, 128, 256 pages...
+        size_type new_page_capacity = m_page_capacity > 0 ? m_page_capacity + (m_page_capacity >> 1) : 8;
         if (new_page_capacity < pages_needed)
         {
             new_page_capacity = pages_needed;
