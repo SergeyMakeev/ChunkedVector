@@ -193,16 +193,14 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     CHUNKED_VEC_INLINE reference operator[](size_type pos)
     {
         CHUNKED_VEC_ASSERT(pos < m_size && "Index out of range");
-        size_type page_idx = pos / PAGE_SIZE;
-        size_type elem_idx = pos % PAGE_SIZE;
+        auto [page_idx, elem_idx] = get_page_and_element_indices(pos);
         return m_pages[page_idx][elem_idx];
     }
 
     CHUNKED_VEC_INLINE const_reference operator[](size_type pos) const
     {
         CHUNKED_VEC_ASSERT(pos < m_size && "Index out of range");
-        size_type page_idx = pos / PAGE_SIZE;
-        size_type elem_idx = pos % PAGE_SIZE;
+        auto [page_idx, elem_idx] = get_page_and_element_indices(pos);
         return m_pages[page_idx][elem_idx];
     }
 
@@ -239,16 +237,14 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     CHUNKED_VEC_INLINE reference back()
     {
         CHUNKED_VEC_ASSERT(m_size > 0 && "Cannot access back of empty chunked_vector");
-        size_type last_page = (m_size - 1) / PAGE_SIZE;
-        size_type last_elem = (m_size - 1) % PAGE_SIZE;
+        auto [last_page, last_elem] = get_page_and_element_indices(m_size - 1);
         return m_pages[last_page][last_elem];
     }
 
     CHUNKED_VEC_INLINE const_reference back() const
     {
         CHUNKED_VEC_ASSERT(m_size > 0 && "Cannot access back of empty chunked_vector");
-        size_type last_page = (m_size - 1) / PAGE_SIZE;
-        size_type last_elem = (m_size - 1) % PAGE_SIZE;
+        auto [last_page, last_elem] = get_page_and_element_indices(m_size - 1);
         return m_pages[last_page][last_elem];
     }
 
@@ -299,8 +295,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     {
         for (size_type i = 0; i < m_size; ++i)
         {
-            size_type page_idx = i / PAGE_SIZE;
-            size_type elem_idx = i % PAGE_SIZE;
+            auto [page_idx, elem_idx] = get_page_and_element_indices(i);
             dod::destruct(&m_pages[page_idx][elem_idx]);
         }
         m_size = 0;
@@ -320,8 +315,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     {
         ensure_capacity_for_one_more();
 
-        size_type page_idx = m_size / PAGE_SIZE;
-        size_type elem_idx = m_size % PAGE_SIZE;
+        auto [page_idx, elem_idx] = get_page_and_element_indices(m_size);
 
         T* ptr = dod::construct<T>(&m_pages[page_idx][elem_idx], std::forward<Args>(args)...);
         ++m_size;
@@ -332,8 +326,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     {
         CHUNKED_VEC_ASSERT(m_size > 0 && "Cannot pop from empty chunked_vector");
         --m_size;
-        size_type page_idx = m_size / PAGE_SIZE;
-        size_type elem_idx = m_size % PAGE_SIZE;
+        auto [page_idx, elem_idx] = get_page_and_element_indices(m_size);
         dod::destruct(&m_pages[page_idx][elem_idx]);
     }
 
@@ -343,8 +336,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         {
             for (size_type i = count; i < m_size; ++i)
             {
-                size_type page_idx = i / PAGE_SIZE;
-                size_type elem_idx = i % PAGE_SIZE;
+                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
                 dod::destruct(&m_pages[page_idx][elem_idx]);
             }
         }
@@ -353,8 +345,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             reserve(count);
             for (size_type i = m_size; i < count; ++i)
             {
-                size_type page_idx = i / PAGE_SIZE;
-                size_type elem_idx = i % PAGE_SIZE;
+                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
                 dod::construct<T>(&m_pages[page_idx][elem_idx]);
             }
         }
@@ -367,8 +358,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         {
             for (size_type i = count; i < m_size; ++i)
             {
-                size_type page_idx = i / PAGE_SIZE;
-                size_type elem_idx = i % PAGE_SIZE;
+                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
                 dod::destruct(&m_pages[page_idx][elem_idx]);
             }
         }
@@ -377,8 +367,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             reserve(count);
             for (size_type i = m_size; i < count; ++i)
             {
-                size_type page_idx = i / PAGE_SIZE;
-                size_type elem_idx = i % PAGE_SIZE;
+                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
                 dod::construct<T>(&m_pages[page_idx][elem_idx], value);
             }
         }
@@ -393,8 +382,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         size_type erase_idx = pos.m_index;
         
         // Destroy the element at the erase position
-        size_type page_idx = erase_idx / PAGE_SIZE;
-        size_type elem_idx = erase_idx % PAGE_SIZE;
+        auto [page_idx, elem_idx] = get_page_and_element_indices(erase_idx);
         dod::destruct(&m_pages[page_idx][elem_idx]);
         
         // Move all elements after the erase position one position forward
@@ -576,6 +564,12 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         }
         m_page_capacity = 0;
         m_page_count = 0;
+    }
+
+    // Helper function to calculate page and element indices from linear position
+    CHUNKED_VEC_INLINE std::pair<size_type, size_type> get_page_and_element_indices(size_type pos) const noexcept
+    {
+        return {pos / PAGE_SIZE, pos % PAGE_SIZE};
     }
 
   public:
