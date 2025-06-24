@@ -385,6 +385,109 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         m_size = count;
     }
 
+    iterator erase(const_iterator pos)
+    {
+        CHUNKED_VEC_ASSERT(pos.m_container == this && "Iterator from different container");
+        CHUNKED_VEC_ASSERT(pos.m_index < m_size && "Iterator out of range");
+        
+        size_type erase_idx = pos.m_index;
+        
+        // Destroy the element at the erase position
+        size_type page_idx = erase_idx / PAGE_SIZE;
+        size_type elem_idx = erase_idx % PAGE_SIZE;
+        dod::destruct(&m_pages[page_idx][elem_idx]);
+        
+        // Move all elements after the erase position one position forward
+        for (size_type i = erase_idx; i < m_size - 1; ++i)
+        {
+            size_type src_page = (i + 1) / PAGE_SIZE;
+            size_type src_elem = (i + 1) % PAGE_SIZE;
+            size_type dst_page = i / PAGE_SIZE;
+            size_type dst_elem = i % PAGE_SIZE;
+            
+            // Move construct at destination and destruct source
+            dod::construct<T>(&m_pages[dst_page][dst_elem], std::move(m_pages[src_page][src_elem]));
+            dod::destruct(&m_pages[src_page][src_elem]);
+        }
+        
+        --m_size;
+        return iterator(this, erase_idx);
+    }
+
+    iterator erase(const_iterator first, const_iterator last)
+    {
+        CHUNKED_VEC_ASSERT(first.m_container == this && last.m_container == this && "Iterators from different container");
+        CHUNKED_VEC_ASSERT(first.m_index <= last.m_index && "Invalid iterator range");
+        CHUNKED_VEC_ASSERT(last.m_index <= m_size && "Iterator out of range");
+        
+        if (first == last)
+        {
+            return iterator(this, first.m_index);
+        }
+        
+        size_type first_idx = first.m_index;
+        size_type last_idx = last.m_index;
+        size_type erase_count = last_idx - first_idx;
+        
+        // Destroy elements in the range [first, last)
+        for (size_type i = first_idx; i < last_idx; ++i)
+        {
+            size_type page_idx = i / PAGE_SIZE;
+            size_type elem_idx = i % PAGE_SIZE;
+            dod::destruct(&m_pages[page_idx][elem_idx]);
+        }
+        
+        // Move elements after last to fill the gap
+        for (size_type i = last_idx; i < m_size; ++i)
+        {
+            size_type src_page = i / PAGE_SIZE;
+            size_type src_elem = i % PAGE_SIZE;
+            size_type dst_idx = i - erase_count;
+            size_type dst_page = dst_idx / PAGE_SIZE;
+            size_type dst_elem = dst_idx % PAGE_SIZE;
+            
+            // Move construct at destination and destruct source
+            dod::construct<T>(&m_pages[dst_page][dst_elem], std::move(m_pages[src_page][src_elem]));
+            dod::destruct(&m_pages[src_page][src_elem]);
+        }
+        
+        m_size -= erase_count;
+        return iterator(this, first_idx);
+    }
+
+    iterator erase_unsorted(const_iterator pos)
+    {
+        CHUNKED_VEC_ASSERT(pos.m_container == this && "Iterator from different container");
+        CHUNKED_VEC_ASSERT(pos.m_index < m_size && "Iterator out of range");
+        
+        size_type erase_idx = pos.m_index;
+        
+        if (erase_idx == m_size - 1)
+        {
+            // If erasing the last element, just pop_back
+            pop_back();
+            return end();
+        }
+        
+        // Replace the element to be erased with the last element
+        size_type erase_page = erase_idx / PAGE_SIZE;
+        size_type erase_elem = erase_idx % PAGE_SIZE;
+        size_type last_page = (m_size - 1) / PAGE_SIZE;
+        size_type last_elem = (m_size - 1) % PAGE_SIZE;
+        
+        // Destroy the element to be erased
+        dod::destruct(&m_pages[erase_page][erase_elem]);
+        
+        // Move the last element to the erased position
+        dod::construct<T>(&m_pages[erase_page][erase_elem], std::move(m_pages[last_page][last_elem]));
+        
+        // Destroy the last element (which was moved)
+        dod::destruct(&m_pages[last_page][last_elem]);
+        
+        --m_size;
+        return iterator(this, erase_idx);
+    }
+
   private:
     T** m_pages;
     size_type m_page_count;
@@ -486,6 +589,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         using reference = ValueType&;
 
         template <typename> friend class basic_iterator;
+        friend class chunked_vector;
 
         basic_iterator() noexcept
             : m_container(nullptr)

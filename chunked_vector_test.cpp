@@ -818,4 +818,521 @@ TEST_F(ChunkedVectorTest, SingleElementOperations) {
     EXPECT_EQ(it, vec.end());
 }
 
+// ============================================================================
+// Additional Coverage Tests
+// ============================================================================
+
+TEST_F(ChunkedVectorTest, EmptyFunctionComprehensive) {
+    chunked_vector<int> vec;
+    
+    // Initially empty
+    EXPECT_TRUE(vec.empty());
+    
+    // Add single element - no longer empty
+    vec.push_back(42);
+    EXPECT_FALSE(vec.empty());
+    
+    // Add more elements - still not empty
+    vec.push_back(43);
+    vec.push_back(44);
+    EXPECT_FALSE(vec.empty());
+    
+    // Remove all but one - still not empty
+    vec.pop_back();
+    vec.pop_back();
+    EXPECT_FALSE(vec.empty());
+    
+    // Remove last element - now empty
+    vec.pop_back();
+    EXPECT_TRUE(vec.empty());
+    
+    // Add element again - not empty
+    vec.push_back(100);
+    EXPECT_FALSE(vec.empty());
+    
+    // Clear - empty again
+    vec.clear();
+    EXPECT_TRUE(vec.empty());
+    
+    // Resize to non-zero - not empty
+    vec.resize(5);
+    EXPECT_FALSE(vec.empty());
+    
+    // Resize to zero - empty again
+    vec.resize(0);
+    EXPECT_TRUE(vec.empty());
+}
+
+TEST_F(ChunkedVectorTest, ResizeSmallerEdgeCases) {
+    chunked_vector<int, 4> vec;  // Small page size for testing
+    
+    // Fill multiple pages
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i * 10);
+    }
+    EXPECT_EQ(vec.size(), 10);
+    
+    // Resize to exactly one page boundary
+    vec.resize(4);
+    EXPECT_EQ(vec.size(), 4);
+    for (int i = 0; i < 4; ++i) {
+        EXPECT_EQ(vec[i], i * 10);
+    }
+    
+    // Resize to middle of a page
+    vec.resize(2);
+    EXPECT_EQ(vec.size(), 2);
+    EXPECT_EQ(vec[0], 0);
+    EXPECT_EQ(vec[1], 10);
+    
+    // Resize to one element
+    vec.resize(1);
+    EXPECT_EQ(vec.size(), 1);
+    EXPECT_EQ(vec[0], 0);
+    
+    // Resize to zero
+    vec.resize(0);
+    EXPECT_EQ(vec.size(), 0);
+    EXPECT_TRUE(vec.empty());
+    
+    // Resize from zero to non-zero
+    vec.resize(3, 999);
+    EXPECT_EQ(vec.size(), 3);
+    for (int i = 0; i < 3; ++i) {
+        EXPECT_EQ(vec[i], 999);
+    }
+    
+    // Resize smaller with value parameter (should not use the value)
+    vec.resize(1, 888);
+    EXPECT_EQ(vec.size(), 1);
+    EXPECT_EQ(vec[0], 999);  // Original value preserved
+}
+
+TEST_F(ChunkedVectorTest, EnsurePageCapacityEarlyExit) {
+    chunked_vector<int, 8> vec;  // Use smaller page size for predictable behavior
+    
+    // Reserve initial capacity
+    vec.reserve(16);  // This should allocate 2 pages (16/8 = 2)
+    size_t initial_capacity = vec.capacity();
+    EXPECT_GE(initial_capacity, 16);
+    
+    // Add some elements but stay within capacity
+    for (int i = 0; i < 8; ++i) {
+        vec.push_back(i);
+    }
+    
+    // Reserve same or smaller capacity - should trigger early exit in ensure_page_capacity
+    vec.reserve(16);
+    EXPECT_EQ(vec.capacity(), initial_capacity);  // Capacity should not change
+    
+    vec.reserve(8);   // Smaller than current capacity
+    EXPECT_EQ(vec.capacity(), initial_capacity);  // Capacity should not change
+    
+    vec.reserve(4);   // Much smaller than current capacity
+    EXPECT_EQ(vec.capacity(), initial_capacity);  // Capacity should not change
+    
+    // Verify elements are still intact
+    for (int i = 0; i < 8; ++i) {
+        EXPECT_EQ(vec[i], i);
+    }
+    
+    // Reserve exact current capacity
+    vec.reserve(initial_capacity);
+    EXPECT_EQ(vec.capacity(), initial_capacity);  // Should trigger early exit
+    
+    // Add more elements to test the boundary
+    for (int i = 8; i < 16; ++i) {
+        vec.push_back(i);
+    }
+    
+    // Reserve current size - should early exit
+    vec.reserve(vec.size());
+    EXPECT_EQ(vec.capacity(), initial_capacity);
+    
+    // Verify all elements
+    for (int i = 0; i < 16; ++i) {
+        EXPECT_EQ(vec[i], i);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EnsurePageCapacityEarlyExitEmptyVector) {
+    chunked_vector<int> vec;
+    
+    // Empty vector with zero capacity
+    EXPECT_EQ(vec.capacity(), 0);
+    
+    // Reserve zero capacity on empty vector - should early exit
+    vec.reserve(0);
+    EXPECT_EQ(vec.capacity(), 0);
+    
+    // Verify vector is still empty and functional
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.size(), 0);
+    
+    // Should still be able to add elements normally
+    vec.push_back(42);
+    EXPECT_EQ(vec.size(), 1);
+    EXPECT_EQ(vec[0], 42);
+}
+
+// ============================================================================
+// Erase Tests
+// ============================================================================
+
+TEST_F(ChunkedVectorTest, EraseSingleElement) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    // Erase element at index 3 (value 3)
+    auto it = vec.begin() + 3;
+    auto result_it = vec.erase(it);
+    
+    EXPECT_EQ(vec.size(), 9);
+    EXPECT_EQ(*result_it, 4);  // Should point to element that moved into position 3
+    EXPECT_EQ(result_it - vec.begin(), 3);  // Should be at index 3
+    
+    // Verify all remaining elements
+    std::vector<int> expected = {0, 1, 2, 4, 5, 6, 7, 8, 9};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(vec[i], expected[i]);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EraseFirstElement) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i + 10);
+    }
+    
+    auto result_it = vec.erase(vec.begin());
+    
+    EXPECT_EQ(vec.size(), 4);
+    EXPECT_EQ(*result_it, 11);
+    EXPECT_EQ(result_it, vec.begin());
+    
+    std::vector<int> expected = {11, 12, 13, 14};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(vec[i], expected[i]);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EraseLastElement) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i + 10);
+    }
+    
+    auto result_it = vec.erase(vec.end() - 1);
+    
+    EXPECT_EQ(vec.size(), 4);
+    EXPECT_EQ(result_it, vec.end());
+    
+    std::vector<int> expected = {10, 11, 12, 13};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(vec[i], expected[i]);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EraseSingleElementVector) {
+    chunked_vector<int> vec;
+    vec.push_back(42);
+    
+    auto result_it = vec.erase(vec.begin());
+    
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.size(), 0);
+    EXPECT_EQ(result_it, vec.end());
+}
+
+TEST_F(ChunkedVectorTest, EraseRange) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    // Erase elements 2, 3, 4 (range [2, 5))
+    auto first = vec.begin() + 2;
+    auto last = vec.begin() + 5;
+    auto result_it = vec.erase(first, last);
+    
+    EXPECT_EQ(vec.size(), 7);
+    EXPECT_EQ(*result_it, 5);  // Should point to element that moved into position 2
+    EXPECT_EQ(result_it - vec.begin(), 2);
+    
+    std::vector<int> expected = {0, 1, 5, 6, 7, 8, 9};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(vec[i], expected[i]);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EraseRangeFromBeginning) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 8; ++i) {
+        vec.push_back(i + 10);
+    }
+    
+    // Erase first 3 elements
+    auto result_it = vec.erase(vec.begin(), vec.begin() + 3);
+    
+    EXPECT_EQ(vec.size(), 5);
+    EXPECT_EQ(*result_it, 13);
+    EXPECT_EQ(result_it, vec.begin());
+    
+    std::vector<int> expected = {13, 14, 15, 16, 17};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(vec[i], expected[i]);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EraseRangeToEnd) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 8; ++i) {
+        vec.push_back(i + 10);
+    }
+    
+    // Erase last 3 elements
+    auto result_it = vec.erase(vec.end() - 3, vec.end());
+    
+    EXPECT_EQ(vec.size(), 5);
+    EXPECT_EQ(result_it, vec.end());
+    
+    std::vector<int> expected = {10, 11, 12, 13, 14};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(vec[i], expected[i]);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EraseEmptyRange) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it = vec.begin() + 2;
+    auto result_it = vec.erase(it, it);  // Empty range
+    
+    EXPECT_EQ(vec.size(), 5);  // No change
+    EXPECT_EQ(result_it, it);  // Should return the same iterator
+    
+    // Verify all elements are unchanged
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_EQ(vec[i], i);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EraseEntireVector) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto result_it = vec.erase(vec.begin(), vec.end());
+    
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.size(), 0);
+    EXPECT_EQ(result_it, vec.end());
+    EXPECT_EQ(result_it, vec.begin());  // begin() == end() for empty vector
+}
+
+TEST_F(ChunkedVectorTest, EraseAcrossPageBoundaries) {
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Fill multiple pages
+    for (int i = 0; i < 12; ++i) {  // 3 full pages
+        vec.push_back(i);
+    }
+    
+    // Erase elements 2-8 (spanning multiple pages)
+    auto result_it = vec.erase(vec.begin() + 2, vec.begin() + 9);
+    
+    EXPECT_EQ(vec.size(), 5);
+    EXPECT_EQ(*result_it, 9);
+    
+    std::vector<int> expected = {0, 1, 9, 10, 11};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(vec[i], expected[i]);
+    }
+}
+
+// ============================================================================
+// Erase Unsorted Tests
+// ============================================================================
+
+TEST_F(ChunkedVectorTest, EraseUnsortedMiddleElement) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    // Erase element at index 3 (value 3)
+    auto it = vec.begin() + 3;
+    auto result_it = vec.erase_unsorted(it);
+    
+    EXPECT_EQ(vec.size(), 9);
+    EXPECT_EQ(*result_it, 9);  // Last element (9) should now be at position 3
+    EXPECT_EQ(result_it - vec.begin(), 3);
+    
+    // Check that the last element was moved to position 3
+    EXPECT_EQ(vec[3], 9);
+    
+    // Check other elements are unchanged
+    EXPECT_EQ(vec[0], 0);
+    EXPECT_EQ(vec[1], 1);
+    EXPECT_EQ(vec[2], 2);
+    EXPECT_EQ(vec[4], 4);
+    EXPECT_EQ(vec[5], 5);
+    EXPECT_EQ(vec[6], 6);
+    EXPECT_EQ(vec[7], 7);
+    EXPECT_EQ(vec[8], 8);
+}
+
+TEST_F(ChunkedVectorTest, EraseUnsortedFirstElement) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i + 10);
+    }
+    
+    auto result_it = vec.erase_unsorted(vec.begin());
+    
+    EXPECT_EQ(vec.size(), 4);
+    EXPECT_EQ(*result_it, 14);  // Last element (14) should now be at position 0
+    EXPECT_EQ(result_it, vec.begin());
+    
+    // Check that last element was moved to first position
+    EXPECT_EQ(vec[0], 14);
+    EXPECT_EQ(vec[1], 11);
+    EXPECT_EQ(vec[2], 12);
+    EXPECT_EQ(vec[3], 13);
+}
+
+TEST_F(ChunkedVectorTest, EraseUnsortedLastElement) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i + 10);
+    }
+    
+    auto result_it = vec.erase_unsorted(vec.end() - 1);
+    
+    EXPECT_EQ(vec.size(), 4);
+    EXPECT_EQ(result_it, vec.end());  // Should return end() when erasing last element
+    
+    // All other elements should be unchanged
+    std::vector<int> expected = {10, 11, 12, 13};
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(vec[i], expected[i]);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EraseUnsortedSingleElementVector) {
+    chunked_vector<int> vec;
+    vec.push_back(42);
+    
+    auto result_it = vec.erase_unsorted(vec.begin());
+    
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.size(), 0);
+    EXPECT_EQ(result_it, vec.end());
+}
+
+TEST_F(ChunkedVectorTest, EraseUnsortedAcrossPages) {
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Fill multiple pages
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i * 10);
+    }
+    
+    // Erase element from middle of first page
+    auto result_it = vec.erase_unsorted(vec.begin() + 1);
+    
+    EXPECT_EQ(vec.size(), 9);
+    EXPECT_EQ(*result_it, 90);  // Last element (90) should be at position 1
+    
+    // Check the swap occurred
+    EXPECT_EQ(vec[0], 0);    // Unchanged
+    EXPECT_EQ(vec[1], 90);   // Last element moved here
+    EXPECT_EQ(vec[2], 20);   // Unchanged
+    EXPECT_EQ(vec[3], 30);   // Unchanged
+    // ... rest should be unchanged except last is gone
+}
+
+// ============================================================================
+// Erase Custom Type Tests
+// ============================================================================
+
+TEST_F(ChunkedVectorCustomTypeTest, EraseCustomType) {
+    chunked_vector<TestObject> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.emplace_back(i * 10);
+    }
+    
+    //int initial_constructors = TestObject::constructor_calls;
+    int initial_destructors = TestObject::destructor_calls;
+    
+    // Erase middle element
+    auto result_it = vec.erase(vec.begin() + 2);
+    
+    EXPECT_EQ(vec.size(), 4);
+    EXPECT_EQ(result_it->value, 30);  // Element that moved into position 2
+    
+    // Check that destructor was called for the erased element
+    // and for temporary objects during the move operations
+    EXPECT_GT(TestObject::destructor_calls, initial_destructors);
+    
+    // Check remaining elements
+    EXPECT_EQ(vec[0].value, 0);
+    EXPECT_EQ(vec[1].value, 10);
+    EXPECT_EQ(vec[2].value, 30);
+    EXPECT_EQ(vec[3].value, 40);
+}
+
+TEST_F(ChunkedVectorCustomTypeTest, EraseUnsortedCustomType) {
+    chunked_vector<TestObject> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.emplace_back(i * 10);
+    }
+    
+    int initial_destructors = TestObject::destructor_calls;
+    
+    // Erase middle element with unsorted erase
+    auto result_it = vec.erase_unsorted(vec.begin() + 1);
+    
+    EXPECT_EQ(vec.size(), 4);
+    EXPECT_EQ(result_it->value, 40);  // Last element should be at position 1
+    
+    // Check that destructor was called
+    EXPECT_GT(TestObject::destructor_calls, initial_destructors);
+    
+    // Check that last element was moved to position 1
+    EXPECT_EQ(vec[0].value, 0);
+    EXPECT_EQ(vec[1].value, 40);  // Last element moved here
+    EXPECT_EQ(vec[2].value, 20);
+    EXPECT_EQ(vec[3].value, 30);
+}
+
+// ============================================================================
+// STL Algorithm Compatibility with Erase
+// ============================================================================
+
+TEST_F(ChunkedVectorTest, EraseWithSTLAlgorithms) {
+    chunked_vector<int> vec;
+    for (int i = 0; i < 20; ++i) {
+        vec.push_back(i);
+    }
+    
+    // Use erase-remove idiom to remove all even numbers
+    auto new_end = std::remove_if(vec.begin(), vec.end(), [](int x) { return x % 2 == 0; });
+    vec.erase(new_end, vec.end());
+    
+    // Should contain only odd numbers
+    EXPECT_EQ(vec.size(), 10);
+    for (size_t i = 0; i < vec.size(); ++i) {
+        EXPECT_EQ(vec[i], static_cast<int>(2 * i + 1));  // 1, 3, 5, 7, ...
+    }
+}
+
 // Main function is not needed as we use gtest_main 
