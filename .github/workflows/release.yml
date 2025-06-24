@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.20'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Build Release
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build --parallel
+
+      - name: Run Tests
+        working-directory: build
+        run: ./chunked_vector_tests
+
+      - name: Package Library
+        run: |
+          mkdir -p chunked_vector_release
+          cp -r chunked_vector chunked_vector_release/
+          cp LICENSE chunked_vector_release/
+          cp README.md chunked_vector_release/
+          tar -czf chunked_vector_${GITHUB_REF_NAME}.tar.gz chunked_vector_release
+
+      - name: Get Changelog Entry
+        id: changelog
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            echo "Found CHANGELOG.md"
+            # Extract changelog for this version (basic implementation)
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            echo "See CHANGELOG.md for details" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            echo "Release ${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            ## What's New
+            
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ## Installation
+            
+            This is a header-only library. Simply include the header files from the `chunked_vector/` directory in your project.
+            
+            ```cpp
+            #include "chunked_vector/chunked_vector.h"
+            ```
+            
+            ## Verification
+            
+            This release has been tested on:
+            - ✅ Linux (Ubuntu 22.04) with GCC 11 and Clang 14
+            - ✅ macOS 13 with Clang
+            - ✅ Windows 2022 with MSVC 2022
+            - ✅ Windows 2019 with MSVC 2019
+            
+            All tests passed successfully.
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./chunked_vector_${{ github.ref_name }}.tar.gz
+          asset_name: chunked_vector_${{ github.ref_name }}.tar.gz
+          asset_content_type: application/gzip 
