@@ -386,7 +386,7 @@ TEST_F(ChunkedVectorTest, ConstIterators) {
     }
 }
 
-TEST_F(ChunkedVectorTest, IteratorArithmetic) {
+TEST_F(ChunkedVectorTest, ForwardIteratorIncrement) {
     chunked_vector<int> vec;
     for (int i = 0; i < 10; ++i) {
         vec.push_back(i * 10);
@@ -395,52 +395,44 @@ TEST_F(ChunkedVectorTest, IteratorArithmetic) {
     auto it = vec.begin();
     EXPECT_EQ(*it, 0);
     
-    it += 3;
-    EXPECT_EQ(*it, 30);
+    // Test pre-increment
+    ++it;
+    EXPECT_EQ(*it, 10);
     
-    it -= 1;
+    ++it;
     EXPECT_EQ(*it, 20);
     
-    auto it2 = it + 2;
-    EXPECT_EQ(*it2, 40);
-    
-    auto it3 = it2 - 1;
-    EXPECT_EQ(*it3, 30);
-    
-    EXPECT_EQ(it2 - it, 2);
+    // Test post-increment
+    auto old_it = it++;
+    EXPECT_EQ(*old_it, 20);
+    EXPECT_EQ(*it, 30);
 }
 
-TEST_F(ChunkedVectorTest, IteratorComparisons) {
+TEST_F(ChunkedVectorTest, ForwardIteratorComparisons) {
     chunked_vector<int> vec;
     for (int i = 0; i < 5; ++i) {
         vec.push_back(i);
     }
     
     auto it1 = vec.begin();
-    auto it2 = vec.begin() + 1;
+    auto it2 = vec.begin();
+    ++it2;  // Advance to second element
     auto it3 = vec.end();
     
+    // Forward iterators support equality comparison
     EXPECT_TRUE(it1 == vec.begin());
     EXPECT_TRUE(it1 != it2);
-    EXPECT_TRUE(it1 < it2);
-    EXPECT_TRUE(it1 <= it2);
-    EXPECT_TRUE(it2 > it1);
-    EXPECT_TRUE(it2 >= it1);
-    EXPECT_TRUE(it2 < it3);
+    EXPECT_TRUE(it2 != it3);
+    EXPECT_FALSE(it1 == it2);
+    EXPECT_FALSE(it2 == it3);
+    
+    // Test comparison with different iterator instances pointing to same position
+    auto it4 = vec.begin();
+    EXPECT_TRUE(it1 == it4);
+    EXPECT_FALSE(it1 != it4);
 }
 
-TEST_F(ChunkedVectorTest, IteratorBracketOperator) {
-    chunked_vector<int> vec;
-    for (int i = 0; i < 10; ++i) {
-        vec.push_back(i * 2);
-    }
-    
-    auto it = vec.begin() + 3;
-    EXPECT_EQ(it[0], 6);
-    EXPECT_EQ(it[1], 8);
-    EXPECT_EQ(it[2], 10);
-    EXPECT_EQ(it[-1], 4);
-}
+
 
 // ============================================================================
 // Capacity Tests
@@ -777,15 +769,24 @@ TEST_F(ChunkedVectorTest, STLAlgorithmCompatibility) {
     int sum = std::accumulate(vec.begin(), vec.end(), 0);
     EXPECT_EQ(sum, 55);  // 1+2+...+10 = 55
     
-    // Test std::sort
-    std::reverse(vec.begin(), vec.end());
-    EXPECT_EQ(vec[0], 10);
-    EXPECT_EQ(vec[9], 1);
+    // Test std::count
+    ptrdiff_t count_even = std::count_if(vec.begin(), vec.end(), [](int x) { return x % 2 == 0; });
+    EXPECT_EQ(count_even, 5);  // 2, 4, 6, 8, 10
     
-    std::sort(vec.begin(), vec.end());
-    for (int i = 0; i < 10; ++i) {
-        EXPECT_EQ(vec[i], i + 1);
-    }
+    // Test std::all_of, std::any_of, std::none_of
+    bool all_positive = std::all_of(vec.begin(), vec.end(), [](int x) { return x > 0; });
+    EXPECT_TRUE(all_positive);
+    
+    bool any_greater_than_5 = std::any_of(vec.begin(), vec.end(), [](int x) { return x > 5; });
+    EXPECT_TRUE(any_greater_than_5);
+    
+    bool none_negative = std::none_of(vec.begin(), vec.end(), [](int x) { return x < 0; });
+    EXPECT_TRUE(none_negative);
+    
+    // Test std::for_each 
+    int multiplied_sum = 0;
+    std::for_each(vec.begin(), vec.end(), [&multiplied_sum](int x) { multiplied_sum += x * 2; });
+    EXPECT_EQ(multiplied_sum, 110);  // (1+2+...+10) * 2 = 55 * 2
 }
 
 // ============================================================================
@@ -975,6 +976,15 @@ TEST_F(ChunkedVectorTest, EnsurePageCapacityEarlyExitEmptyVector) {
     EXPECT_EQ(vec[0], 42);
 }
 
+// Helper function to advance forward iterator by n steps
+template<typename Iterator>
+Iterator advance_iterator(Iterator it, int n) {
+    for (int i = 0; i < n; ++i) {
+        ++it;
+    }
+    return it;
+}
+
 // ============================================================================
 // Erase Tests
 // ============================================================================
@@ -986,12 +996,15 @@ TEST_F(ChunkedVectorTest, EraseSingleElement) {
     }
     
     // Erase element at index 3 (value 3)
-    auto it = vec.begin() + 3;
+    auto it = advance_iterator(vec.begin(), 3);
     auto result_it = vec.erase(it);
     
     EXPECT_EQ(vec.size(), 9);
     EXPECT_EQ(*result_it, 4);  // Should point to element that moved into position 3
-    EXPECT_EQ(result_it - vec.begin(), 3);  // Should be at index 3
+    
+    // Verify result iterator points to the correct position by checking it equals the expected iterator
+    auto expected_it = advance_iterator(vec.begin(), 3);
+    EXPECT_EQ(result_it, expected_it);
     
     // Verify all remaining elements
     std::vector<int> expected = {0, 1, 2, 4, 5, 6, 7, 8, 9};
@@ -1024,7 +1037,9 @@ TEST_F(ChunkedVectorTest, EraseLastElement) {
         vec.push_back(i + 10);
     }
     
-    auto result_it = vec.erase(vec.end() - 1);
+    // Get iterator to last element (one before end)
+    auto last_element_it = advance_iterator(vec.begin(), 4);
+    auto result_it = vec.erase(last_element_it);
     
     EXPECT_EQ(vec.size(), 4);
     EXPECT_EQ(result_it, vec.end());
@@ -1053,13 +1068,16 @@ TEST_F(ChunkedVectorTest, EraseRange) {
     }
     
     // Erase elements 2, 3, 4 (range [2, 5))
-    auto first = vec.begin() + 2;
-    auto last = vec.begin() + 5;
+    auto first = advance_iterator(vec.begin(), 2);
+    auto last = advance_iterator(vec.begin(), 5);
     auto result_it = vec.erase(first, last);
     
     EXPECT_EQ(vec.size(), 7);
     EXPECT_EQ(*result_it, 5);  // Should point to element that moved into position 2
-    EXPECT_EQ(result_it - vec.begin(), 2);
+    
+    // Verify result iterator points to the correct position
+    auto expected_it = advance_iterator(vec.begin(), 2);
+    EXPECT_EQ(result_it, expected_it);
     
     std::vector<int> expected = {0, 1, 5, 6, 7, 8, 9};
     for (size_t i = 0; i < expected.size(); ++i) {
@@ -1074,7 +1092,8 @@ TEST_F(ChunkedVectorTest, EraseRangeFromBeginning) {
     }
     
     // Erase first 3 elements
-    auto result_it = vec.erase(vec.begin(), vec.begin() + 3);
+    auto last = advance_iterator(vec.begin(), 3);
+    auto result_it = vec.erase(vec.begin(), last);
     
     EXPECT_EQ(vec.size(), 5);
     EXPECT_EQ(*result_it, 13);
@@ -1092,8 +1111,9 @@ TEST_F(ChunkedVectorTest, EraseRangeToEnd) {
         vec.push_back(i + 10);
     }
     
-    // Erase last 3 elements
-    auto result_it = vec.erase(vec.end() - 3, vec.end());
+    // Erase last 3 elements (from index 5 to end)
+    auto first = advance_iterator(vec.begin(), 5);
+    auto result_it = vec.erase(first, vec.end());
     
     EXPECT_EQ(vec.size(), 5);
     EXPECT_EQ(result_it, vec.end());
@@ -1110,7 +1130,7 @@ TEST_F(ChunkedVectorTest, EraseEmptyRange) {
         vec.push_back(i);
     }
     
-    auto it = vec.begin() + 2;
+    auto it = advance_iterator(vec.begin(), 2);
     auto result_it = vec.erase(it, it);  // Empty range
     
     EXPECT_EQ(vec.size(), 5);  // No change
@@ -1146,7 +1166,9 @@ TEST_F(ChunkedVectorTest, EraseAcrossPageBoundaries) {
     }
     
     // Erase elements 2-8 (spanning multiple pages)
-    auto result_it = vec.erase(vec.begin() + 2, vec.begin() + 9);
+    auto first = advance_iterator(vec.begin(), 2);
+    auto last = advance_iterator(vec.begin(), 9);
+    auto result_it = vec.erase(first, last);
     
     EXPECT_EQ(vec.size(), 5);
     EXPECT_EQ(*result_it, 9);
@@ -1168,12 +1190,15 @@ TEST_F(ChunkedVectorTest, EraseUnsortedMiddleElement) {
     }
     
     // Erase element at index 3 (value 3)
-    auto it = vec.begin() + 3;
+    auto it = advance_iterator(vec.begin(), 3);
     auto result_it = vec.erase_unsorted(it);
     
     EXPECT_EQ(vec.size(), 9);
     EXPECT_EQ(*result_it, 9);  // Last element (9) should now be at position 3
-    EXPECT_EQ(result_it - vec.begin(), 3);
+    
+    // Verify result iterator points to the correct position
+    auto expected_it = advance_iterator(vec.begin(), 3);
+    EXPECT_EQ(result_it, expected_it);
     
     // Check that the last element was moved to position 3
     EXPECT_EQ(vec[3], 9);
@@ -1214,7 +1239,9 @@ TEST_F(ChunkedVectorTest, EraseUnsortedLastElement) {
         vec.push_back(i + 10);
     }
     
-    auto result_it = vec.erase_unsorted(vec.end() - 1);
+    // Get iterator to last element (one before end)
+    auto last_element_it = advance_iterator(vec.begin(), 4);
+    auto result_it = vec.erase_unsorted(last_element_it);
     
     EXPECT_EQ(vec.size(), 4);
     EXPECT_EQ(result_it, vec.end());  // Should return end() when erasing last element
@@ -1247,7 +1274,8 @@ TEST_F(ChunkedVectorTest, EraseUnsortedAcrossPages) {
     }
     
     // Erase element from middle of first page
-    auto result_it = vec.erase_unsorted(vec.begin() + 1);
+    auto it = advance_iterator(vec.begin(), 1);
+    auto result_it = vec.erase_unsorted(it);
     
     EXPECT_EQ(vec.size(), 9);
     EXPECT_EQ(*result_it, 90);  // Last element (90) should be at position 1
@@ -1274,7 +1302,8 @@ TEST_F(ChunkedVectorCustomTypeTest, EraseCustomType) {
     int initial_destructors = TestObject::destructor_calls;
     
     // Erase middle element
-    auto result_it = vec.erase(vec.begin() + 2);
+    auto it = advance_iterator(vec.begin(), 2);
+    auto result_it = vec.erase(it);
     
     EXPECT_EQ(vec.size(), 4);
     EXPECT_EQ(result_it->value, 30);  // Element that moved into position 2
@@ -1299,7 +1328,8 @@ TEST_F(ChunkedVectorCustomTypeTest, EraseUnsortedCustomType) {
     int initial_destructors = TestObject::destructor_calls;
     
     // Erase middle element with unsorted erase
-    auto result_it = vec.erase_unsorted(vec.begin() + 1);
+    auto it = advance_iterator(vec.begin(), 1);
+    auto result_it = vec.erase_unsorted(it);
     
     EXPECT_EQ(vec.size(), 4);
     EXPECT_EQ(result_it->value, 40);  // Last element should be at position 1

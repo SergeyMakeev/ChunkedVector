@@ -577,7 +577,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     template <typename ValueType> class basic_iterator
     {
       public:
-        using iterator_category = std::random_access_iterator_tag;
+        using iterator_category = std::forward_iterator_tag;
         using value_type = std::remove_cv_t<ValueType>;
         using difference_type = std::ptrdiff_t;
         using pointer = ValueType*;
@@ -589,6 +589,8 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         basic_iterator() noexcept
             : m_container(nullptr)
             , m_index(0)
+            , m_current_page(nullptr)
+            , m_page_element_index(0)
         {
         }
 
@@ -596,6 +598,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             : m_container(container)
             , m_index(index)
         {
+            update_page_cache();
         }
 
         template <typename U, typename = std::enable_if_t<std::is_const_v<ValueType> && !std::is_const_v<U>>>
@@ -603,91 +606,46 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             : m_container(other.m_container)
             , m_index(other.m_index)
         {
+            update_page_cache();
         }
 
         reference operator*() const
         {
             CHUNKED_VEC_ASSERT(m_container && m_index < m_container->size() && "Iterator out of range");
-            if constexpr (std::is_const_v<ValueType>) {
-                return (*m_container)[m_index];
-            } else {
-                return const_cast<chunked_vector*>(m_container)->operator[](m_index);
-            }
+            CHUNKED_VEC_ASSERT(m_current_page && "Invalid page cache");
+            return m_current_page[m_page_element_index];
         }
 
         pointer operator->() const
         {
             CHUNKED_VEC_ASSERT(m_container && m_index < m_container->size() && "Iterator out of range");
-            if constexpr (std::is_const_v<ValueType>) {
-                return &(*m_container)[m_index];
-            } else {
-                return &const_cast<chunked_vector*>(m_container)->operator[](m_index);
-            }
+            CHUNKED_VEC_ASSERT(m_current_page && "Invalid page cache");
+            return &m_current_page[m_page_element_index];
         }
 
-        reference operator[](difference_type n) const
-        {
-            CHUNKED_VEC_ASSERT(m_container && (m_index + n) < m_container->size() && "Iterator out of range");
-            if constexpr (std::is_const_v<ValueType>) {
-                return (*m_container)[m_index + n];
-            } else {
-                return const_cast<chunked_vector*>(m_container)->operator[](m_index + n);
-            }
-        }
+
 
         basic_iterator& operator++()
         {
             ++m_index;
+            ++m_page_element_index;
+            if (m_page_element_index >= PAGE_SIZE || m_index >= m_container->size())
+            {
+                update_page_cache();
+            }
             return *this;
         }
 
         basic_iterator operator++(int)
         {
             basic_iterator temp = *this;
-            ++m_index;
+            ++(*this);
             return temp;
         }
 
-        basic_iterator& operator--()
-        {
-            --m_index;
-            return *this;
-        }
 
-        basic_iterator operator--(int)
-        {
-            basic_iterator temp = *this;
-            --m_index;
-            return temp;
-        }
 
-        basic_iterator& operator+=(difference_type n)
-        {
-            m_index += n;
-            return *this;
-        }
 
-        basic_iterator& operator-=(difference_type n)
-        {
-            m_index -= n;
-            return *this;
-        }
-
-        basic_iterator operator+(difference_type n) const
-        {
-            return basic_iterator(m_container, m_index + n);
-        }
-
-        basic_iterator operator-(difference_type n) const
-        {
-            return basic_iterator(m_container, m_index - n);
-        }
-
-        difference_type operator-(const basic_iterator& other) const
-        {
-            CHUNKED_VEC_ASSERT(m_container == other.m_container && "Iterators from different containers");
-            return static_cast<difference_type>(m_index) - static_cast<difference_type>(other.m_index);
-        }
 
         bool operator==(const basic_iterator& other) const noexcept
         {
@@ -699,47 +657,35 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             return !(*this == other);
         }
 
-        bool operator<(const basic_iterator& other) const noexcept
-        {
-            CHUNKED_VEC_ASSERT(m_container == other.m_container && "Iterators from different containers");
-            return m_index < other.m_index;
-        }
 
-        bool operator<=(const basic_iterator& other) const noexcept
-        {
-            return *this < other || *this == other;
-        }
-
-        bool operator>(const basic_iterator& other) const noexcept
-        {
-            return !(*this <= other);
-        }
-
-        bool operator>=(const basic_iterator& other) const noexcept
-        {
-            return !(*this < other);
-        }
 
       private:
         const chunked_vector* m_container;
         size_type m_index;
+        ValueType* m_current_page;
+        size_type m_page_element_index;
+
+        void update_page_cache()
+        {
+            if (!m_container || m_index >= m_container->size())
+            {
+                m_current_page = nullptr;
+                m_page_element_index = 0;
+                return;
+            }
+
+            auto [page_idx, elem_idx] = m_container->get_page_and_element_indices(m_index);
+            m_page_element_index = elem_idx;
+            
+            if constexpr (std::is_const_v<ValueType>) {
+                m_current_page = m_container->m_pages[page_idx];
+            } else {
+                m_current_page = const_cast<chunked_vector*>(m_container)->m_pages[page_idx];
+            }
+        }
     };
 };
 
-template <typename T, size_t PAGE_SIZE>
-typename chunked_vector<T, PAGE_SIZE>::iterator operator+(
-    typename chunked_vector<T, PAGE_SIZE>::iterator::difference_type n,
-    const typename chunked_vector<T, PAGE_SIZE>::iterator& it)
-{
-    return it + n;
-}
 
-template <typename T, size_t PAGE_SIZE>
-typename chunked_vector<T, PAGE_SIZE>::const_iterator operator+(
-    typename chunked_vector<T, PAGE_SIZE>::const_iterator::difference_type n,
-    const typename chunked_vector<T, PAGE_SIZE>::const_iterator& it)
-{
-    return it + n;
-}
 
 } // namespace dod 
