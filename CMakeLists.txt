@@ -44,5 +44,5 @@ else()
   target_compile_options(chunked_vector_tests PRIVATE -Wall -Wextra -pedantic)
 endif()
 
-# Discover tests - use set_tests_properties to ensure test discovery
-gtest_discover_tests(chunked_vector_tests PROPERTIES DISCOVERY_MODE PRE_TEST) 
+# Discover tests - use POST_BUILD mode to avoid CI issues across all platforms
+gtest_discover_tests(chunked_vector_tests PROPERTIES DISCOVERY_MODE POST_BUILD) 
