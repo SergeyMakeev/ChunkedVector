@@ -115,6 +115,10 @@ jobs:
         run: |
           choco install ninja
 
+      - name: Setup MSBuild (Windows)
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
+
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v1.14
         with:
