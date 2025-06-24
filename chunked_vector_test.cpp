@@ -1335,4 +1335,119 @@ TEST_F(ChunkedVectorTest, EraseWithSTLAlgorithms) {
     }
 }
 
+// ============================================================================
+// Additional Coverage Tests for 100% Coverage
+// ============================================================================
+
+TEST_F(ChunkedVectorTest, ShrinkToFitEmptyVectorEdgeCase) {
+    // This test covers the redundant assignment line in shrink_to_fit
+    // when pages_needed == 0 && m_size == 0
+    chunked_vector<int> vec;
+    
+    // Vector is empty, so pages_needed will be 0 and m_size is 0
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.size(), 0);
+    
+    // This should hit the condition where pages_needed == 0 && m_size == 0
+    // which triggers the redundant assignment: pages_needed = 0;
+    vec.shrink_to_fit();
+    
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.size(), 0);
+}
+
+TEST_F(ChunkedVectorTest, EnsurePageCapacityGrowthFactorInsufficient) {
+    // This test covers the case where the growth factor (capacity + capacity/2) 
+    // is insufficient and we need to set new_page_capacity = pages_needed
+    
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // First, establish some initial capacity
+    vec.reserve(PAGE_SIZE * 8);  // Reserve 8 pages
+    size_t initial_capacity = vec.capacity();
+    EXPECT_GE(initial_capacity, PAGE_SIZE * 8);
+    
+    // Add some elements to use the current capacity
+    for (int i = 0; i < PAGE_SIZE * 6; ++i) {
+        vec.push_back(i);
+    }
+    
+    // Now request a capacity that's much larger than the growth factor would provide
+    // Growth factor is: current_capacity + (current_capacity >> 1) = 8 + 4 = 12 pages
+    // But we'll request much more than that to force the line: new_page_capacity = pages_needed;
+    size_t huge_capacity = PAGE_SIZE * 100;  // Request 100 pages
+    vec.reserve(huge_capacity);
+    
+    EXPECT_GE(vec.capacity(), huge_capacity);
+    
+    // Verify elements are still intact
+    for (int i = 0; i < PAGE_SIZE * 6; ++i) {
+        EXPECT_EQ(vec[i], i);
+    }
+}
+
+TEST_F(ChunkedVectorTest, EnsurePageCapacityWithExistingPages) {
+    // This test covers the copy loop and free operations in ensure_page_capacity
+    // We need to trigger page array reallocation when there are existing pages
+    
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Start with an empty vector and add elements to create some pages
+    for (int i = 0; i < PAGE_SIZE * 3; ++i) {  // Fill 3 pages
+        vec.push_back(i * 10);
+    }
+    
+    size_t initial_capacity = vec.capacity();
+    EXPECT_EQ(initial_capacity, PAGE_SIZE * 3);
+    
+    // Now trigger a reallocation that will copy existing pages
+    // This should hit the copy loop: new_pages[i] = m_pages[i];
+    // and the free operation: CHUNKED_VEC_FREE(m_pages);
+    vec.reserve(PAGE_SIZE * 20);  // Request much more capacity
+    
+    EXPECT_GE(vec.capacity(), PAGE_SIZE * 20);
+    
+    // Verify all existing elements are still intact after reallocation
+    for (int i = 0; i < PAGE_SIZE * 3; ++i) {
+        EXPECT_EQ(vec[i], i * 10);
+    }
+    
+    // Add more elements to verify the new capacity works
+    for (int i = PAGE_SIZE * 3; i < PAGE_SIZE * 5; ++i) {
+        vec.push_back(i * 10);
+    }
+    
+    // Verify all elements including new ones
+    for (int i = 0; i < PAGE_SIZE * 5; ++i) {
+        EXPECT_EQ(vec[i], i * 10);
+    }
+}
+
+TEST_F(ChunkedVectorTest, PageArrayReallocationFromNonEmpty) {
+    // Another test to ensure we hit the page copying and freeing code paths
+    constexpr size_t PAGE_SIZE = 8;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Create a vector with some content
+    for (int i = 0; i < PAGE_SIZE + 1; ++i) {  // Force allocation of 2 pages
+        vec.push_back(i);
+    }
+    
+    EXPECT_EQ(vec.size(), PAGE_SIZE + 1);
+    size_t original_capacity = vec.capacity();
+    
+    // Force reallocation by requesting much larger capacity
+    // This will definitely trigger the page copying logic
+    vec.reserve(PAGE_SIZE * 50);
+    
+    EXPECT_GT(vec.capacity(), original_capacity);
+    
+    // Verify data integrity
+    for (int i = 0; i < PAGE_SIZE + 1; ++i) {
+        EXPECT_EQ(vec[i], i);
+    }
+}
+
 // Main function is not needed as we use gtest_main 
