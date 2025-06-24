@@ -55,6 +55,13 @@ template <typename U, typename... Args> static U* reconstruct(U* ptr, Args&&... 
     return std::launder(p);
 }
 
+// Helper to ensure alignment is at least alignof(void*) for compatibility with macOS.
+// macOS does not support alignments smaller than alignof(void*) in aligned_alloc,
+// so we need to ensure the alignment parameter is always at least that size.
+// For types with larger natural alignment, we still use their natural alignment.
+template <typename T>
+inline constexpr size_t safe_alignment_of = alignof(T) < alignof(void*) ? alignof(void*) : alignof(T);
+
 }
 
 namespace dod
@@ -506,7 +513,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             new_page_capacity = pages_needed;
         }
 
-        T** new_pages = static_cast<T**>(CHUNKED_VEC_ALLOC(new_page_capacity * sizeof(T*), alignof(T*)));
+        T** new_pages = static_cast<T**>(CHUNKED_VEC_ALLOC(new_page_capacity * sizeof(T*), safe_alignment_of<T*>));
         
         for (size_type i = 0; i < m_page_count; ++i)
         {
@@ -532,7 +539,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         CHUNKED_VEC_ASSERT(page_idx < m_page_capacity && "Page index out of capacity");
         CHUNKED_VEC_ASSERT(m_pages[page_idx] == nullptr && "Page already allocated");
         
-        m_pages[page_idx] = static_cast<T*>(CHUNKED_VEC_ALLOC(PAGE_SIZE * sizeof(T), alignof(T)));
+        m_pages[page_idx] = static_cast<T*>(CHUNKED_VEC_ALLOC(PAGE_SIZE * sizeof(T), safe_alignment_of<T>));
         if (page_idx >= m_page_count)
         {
             m_page_count = page_idx + 1;
