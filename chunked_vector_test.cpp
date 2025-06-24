@@ -131,6 +131,39 @@ TEST_F(ChunkedVectorTest, MoveConstructor) {
     }
 }
 
+TEST_F(ChunkedVectorTest, InitializerListConstructor) {
+    // Test with empty initializer list
+    chunked_vector<int> empty_vec{};
+    EXPECT_TRUE(empty_vec.empty());
+    EXPECT_EQ(empty_vec.size(), 0);
+    
+    // Test with single element
+    chunked_vector<int> single_vec{42};
+    EXPECT_EQ(single_vec.size(), 1);
+    EXPECT_EQ(single_vec[0], 42);
+    
+    // Test with multiple elements
+    chunked_vector<int> multi_vec{1, 2, 3, 4, 5};
+    EXPECT_EQ(multi_vec.size(), 5);
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_EQ(multi_vec[i], i + 1);
+    }
+    
+    // Test with string type
+    chunked_vector<std::string> string_vec{"hello", "world", "test"};
+    EXPECT_EQ(string_vec.size(), 3);
+    EXPECT_EQ(string_vec[0], "hello");
+    EXPECT_EQ(string_vec[1], "world");
+    EXPECT_EQ(string_vec[2], "test");
+    
+    // Test with many elements (spanning multiple pages)
+    chunked_vector<int, 4> large_vec{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    EXPECT_EQ(large_vec.size(), 10);
+    for (int i = 0; i < 10; ++i) {
+        EXPECT_EQ(large_vec[i], i + 1);
+    }
+}
+
 // ============================================================================
 // Assignment Tests
 // ============================================================================
@@ -181,6 +214,55 @@ TEST_F(ChunkedVectorTest, SelfAssignment) {
     for (int i = 0; i < 5; ++i) {
         EXPECT_EQ(vec[i], i);
     }
+}
+
+TEST_F(ChunkedVectorTest, InitializerListAssignment) {
+    chunked_vector<int> vec;
+    
+    // Initial values
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i * 10);
+    }
+    EXPECT_EQ(vec.size(), 5);
+    
+    // Assign empty initializer list
+    vec = {};
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.size(), 0);
+    
+    // Assign single element
+    vec = {42};
+    EXPECT_EQ(vec.size(), 1);
+    EXPECT_EQ(vec[0], 42);
+    
+    // Assign multiple elements
+    vec = {10, 20, 30, 40, 50};
+    EXPECT_EQ(vec.size(), 5);
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_EQ(vec[i], (i + 1) * 10);
+    }
+    
+    // Assign to larger size (growing)
+    vec = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    EXPECT_EQ(vec.size(), 10);
+    for (int i = 0; i < 10; ++i) {
+        EXPECT_EQ(vec[i], i + 1);
+    }
+    
+    // Assign to smaller size (shrinking)
+    vec = {100, 200};
+    EXPECT_EQ(vec.size(), 2);
+    EXPECT_EQ(vec[0], 100);
+    EXPECT_EQ(vec[1], 200);
+    
+    // Test with string type
+    chunked_vector<std::string> string_vec{"old", "values"};
+    string_vec = {"new", "string", "values", "here"};
+    EXPECT_EQ(string_vec.size(), 4);
+    EXPECT_EQ(string_vec[0], "new");
+    EXPECT_EQ(string_vec[1], "string");
+    EXPECT_EQ(string_vec[2], "values");
+    EXPECT_EQ(string_vec[3], "here");
 }
 
 // ============================================================================
@@ -629,6 +711,37 @@ TEST_F(ChunkedVectorCustomTypeTest, CustomTypeCopyMove) {
     
     EXPECT_EQ(vec[0].value, 42);
     EXPECT_EQ(vec[1].value, 43);
+}
+
+TEST_F(ChunkedVectorCustomTypeTest, InitializerListCustomType) {
+    {
+        // Test initializer_list constructor with custom type
+        chunked_vector<TestObject> vec{TestObject(10), TestObject(20), TestObject(30)};
+        
+        EXPECT_EQ(vec.size(), 3);
+        EXPECT_EQ(vec[0].value, 10);
+        EXPECT_EQ(vec[1].value, 20);
+        EXPECT_EQ(vec[2].value, 30);
+        
+        // Check constructor calls (3 for initializer list + moves/copies for insertion)
+        EXPECT_GT(TestObject::constructor_calls, 0);
+        
+        // Test initializer_list assignment
+        vec = {TestObject(100), TestObject(200)};
+        EXPECT_EQ(vec.size(), 2);
+        EXPECT_EQ(vec[0].value, 100);
+        EXPECT_EQ(vec[1].value, 200);
+        
+        // Test empty initializer list assignment
+        vec = {};
+        EXPECT_TRUE(vec.empty());
+        EXPECT_EQ(vec.size(), 0);
+    }
+    
+    // After scope, all objects should be destroyed
+    // Note: The exact counts depend on optimization and move semantics,
+    // but destructor calls should match constructor calls eventually
+    EXPECT_GT(TestObject::destructor_calls, 0);
 }
 
 // ============================================================================

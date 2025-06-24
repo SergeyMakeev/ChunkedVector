@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <initializer_list>
 #include <iterator>
 #include <new>
 #include <stdexcept>
@@ -104,6 +105,19 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         resize(count, value);
     }
 
+    chunked_vector(std::initializer_list<T> init)
+        : m_pages(nullptr)
+        , m_page_count(0)
+        , m_page_capacity(0)
+        , m_size(0)
+    {
+        reserve(init.size());
+        for (const auto& item : init)
+        {
+            push_back(item);
+        }
+    }
+
     chunked_vector(const chunked_vector& other)
         : m_pages(nullptr)
         , m_page_count(0)
@@ -161,6 +175,17 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             other.m_page_count = 0;
             other.m_page_capacity = 0;
             other.m_size = 0;
+        }
+        return *this;
+    }
+
+    chunked_vector& operator=(std::initializer_list<T> init)
+    {
+        clear();
+        reserve(init.size());
+        for (const auto& item : init)
+        {
+            push_back(item);
         }
         return *this;
     }
