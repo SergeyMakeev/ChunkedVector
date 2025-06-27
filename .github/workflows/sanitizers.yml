@@ -1,0 +1,53 @@
+name: Sanitizers
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  sanitizers:
+    name: ${{ matrix.sanitizer }} Sanitizer
+    runs-on: ubuntu-22.04
+    
+    strategy:
+      matrix:
+        sanitizer: [address, undefined, thread]
+        
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.25'
+
+      - name: Configure CMake with ${{ matrix.sanitizer }} Sanitizer
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.sanitizer }}" \
+            -G Ninja
+        env:
+          CC: clang-14
+          CXX: clang++-14
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run Tests with ${{ matrix.sanitizer }} Sanitizer
+        working-directory: build
+        run: ./chunked_vector_tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: abort_on_error=1
+          TSAN_OPTIONS: abort_on_error=1 

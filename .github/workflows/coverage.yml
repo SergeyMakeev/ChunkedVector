@@ -1,0 +1,65 @@
+name: Coverage
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build gcc-11 g++-11 lcov
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.25'
+
+      - name: Configure CMake with Coverage
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+            -DCMAKE_C_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+            -G Ninja
+        env:
+          CC: gcc-11
+          CXX: g++-11
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run Tests
+        working-directory: build
+        run: ./chunked_vector_tests
+
+      - name: Generate Coverage Report
+        run: |
+          lcov --directory build --capture --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' --output-file coverage.info
+          lcov --remove coverage.info '*/googletest/*' --output-file coverage.info
+          lcov --remove coverage.info '*/test/*' --output-file coverage.info
+          lcov --remove coverage.info '*_test.cpp' --output-file coverage.info
+          lcov --list coverage.info
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: SergeyMakeev/chunked_vector
+          file: ./coverage.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false 

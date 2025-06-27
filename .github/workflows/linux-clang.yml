@@ -1,0 +1,73 @@
+name: Linux Clang
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  linux-clang:
+    name: ${{ matrix.config.name }}
+    runs-on: ubuntu-22.04
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+              name: "Clang 14 Release",
+              cc: "clang-14",
+              cxx: "clang++-14",
+              build_type: "Release"
+            }
+          - {
+              name: "Clang 14 Debug",
+              cc: "clang-14",
+              cxx: "clang++-14", 
+              build_type: "Debug"
+            }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.25'
+
+      - name: Set Environment Variables
+        run: |
+          echo "CC=${{ matrix.config.cc }}" >> $GITHUB_ENV
+          echo "CXX=${{ matrix.config.cxx }}" >> $GITHUB_ENV
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.config.build_type }} \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.config.build_type }} --parallel
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure --parallel -C ${{ matrix.config.build_type }}
+
+      - name: Run Tests Directly
+        working-directory: build
+        run: ./chunked_vector_tests --gtest_output=xml:test_results.xml
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.config.name }}
+          path: build/test_results.xml 

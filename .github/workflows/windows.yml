@@ -1,0 +1,80 @@
+name: Windows
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+              name: "MSVC 2022 Release",
+              os: windows-2022,
+              cc: "cl",
+              cxx: "cl",
+              build_type: "Release",
+              generator: "Visual Studio 17 2022"
+            }
+          - {
+              name: "MSVC 2022 Debug",
+              os: windows-2022,
+              cc: "cl", 
+              cxx: "cl",
+              build_type: "Debug",
+              generator: "Visual Studio 17 2022"
+            }
+          - {
+              name: "MSVC 2019 Release",
+              os: windows-2019,
+              cc: "cl",
+              cxx: "cl", 
+              build_type: "Release",
+              generator: "Visual Studio 16 2019"
+            }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          choco install ninja
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.25'
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G "${{ matrix.config.generator }}" -A x64
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.config.build_type }} --parallel
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure --parallel -C ${{ matrix.config.build_type }}
+
+      - name: Run Tests Directly
+        working-directory: build
+        run: .\${{ matrix.config.build_type }}\chunked_vector_tests.exe --gtest_output=xml:test_results.xml
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.config.name }}
+          path: build/test_results.xml 

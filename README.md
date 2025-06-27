@@ -17,14 +17,14 @@ A high-performance, header-only C++17 chunked vector implementation with compreh
 
 ## Build Status
 
-| Platform | Compiler | Status |
-|----------|----------|--------|
-| Ubuntu 22.04 | GCC 11 |  |
-| Ubuntu 22.04 | Clang 14 |  |
-| macOS 13 | Clang | |
-| macOS Latest | Clang |  |
-| Windows 2022 | MSVC 2022 |  |
-| Windows 2019 | MSVC 2019 |  |
+Each badge above represents a different aspect of our continuous integration:
+
+- **Linux GCC**: Tests with GCC 11 (Release & Debug builds)
+- **Linux Clang**: Tests with Clang 14 (Release & Debug builds)  
+- **macOS**: Tests on macOS 13 and latest (Release & Debug builds)
+- **Windows**: Tests with MSVC 2022 and 2019 (Release & Debug builds)
+- **Coverage**: Code coverage analysis with gcov/lcov
+- **Sanitizers**: Memory safety checks (AddressSanitizer, UndefinedBehaviorSanitizer, ThreadSanitizer)
 
 ## Quick Start
 
@@ -81,14 +81,14 @@ ctest --output-on-failure
 
 ## Continuous Integration
 
-This project uses GitHub Actions for continuous integration with the following configurations:
+This project uses GitHub Actions with separate workflows for different testing aspects:
 
-- **Multi-platform testing**: Windows, Linux (Ubuntu), macOS
-- **Multiple compilers**: GCC, Clang, MSVC
-- **Build configurations**: Release and Debug builds
-- **Code coverage**: Generated using gcov/lcov
-- **Sanitizers**: AddressSanitizer, UndefinedBehaviorSanitizer, ThreadSanitizer
-- **Comprehensive testing**: GoogleTest framework with extensive test coverage
+- **Platform-specific workflows**: Separate workflows for Linux (GCC/Clang), macOS, and Windows
+- **Multiple compilers**: GCC 11, Clang 14, MSVC 2019/2022
+- **Build configurations**: Both Release and Debug builds for all platforms
+- **Code coverage**: Dedicated workflow using gcov/lcov with Codecov integration
+- **Memory safety**: Separate sanitizer workflow with AddressSanitizer, UndefinedBehaviorSanitizer, and ThreadSanitizer
+- **Comprehensive testing**: GoogleTest framework with extensive test coverage across all configurations
 
 ## License
 
