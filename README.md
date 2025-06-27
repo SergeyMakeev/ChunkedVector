@@ -8,6 +8,8 @@
 [![Sanitizers](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml)
 [![License](https://img.shields.io/github/license/SergeyMakeev/chunked_vector)](LICENSE)
 [![Language](https://img.shields.io/github/languages/top/SergeyMakeev/chunked_vector)](https://github.com/SergeyMakeev/chunked_vector)
+[![codecov](https://codecov.io/gh/SergeyMakeev/chunked_vector/graph/badge.svg?token=8B80XIGDVT)](https://codecov.io/gh/SergeyMakeev/chunked_vector)
+
 
 A high-performance, header-only C++17 chunked vector implementation with comprehensive testing.
 
