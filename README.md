@@ -1,6 +1,11 @@
 # chunked_vector
 
-[![CI](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/ci.yml)
+[![Linux GCC](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml)
+[![Linux Clang](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml)
+[![macOS](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml)
+[![Windows](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml)
+[![Coverage](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml)
+[![Sanitizers](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml)
 [![License](https://img.shields.io/github/license/SergeyMakeev/chunked_vector)](LICENSE)
 [![Language](https://img.shields.io/github/languages/top/SergeyMakeev/chunked_vector)](https://github.com/SergeyMakeev/chunked_vector)
 
