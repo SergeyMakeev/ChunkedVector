@@ -1,8 +1,8 @@
 # chunked_vector
 
-[![CI](https://github.com/[username]/chunked_vector/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/[username]/chunked_vector/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/[username]/chunked_vector)](LICENSE)
-[![Language](https://img.shields.io/github/languages/top/[username]/chunked_vector)](https://github.com/[username]/chunked_vector)
+[![CI](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/SergeyMakeev/chunked_vector)](LICENSE)
+[![Language](https://img.shields.io/github/languages/top/SergeyMakeev/chunked_vector)](https://github.com/SergeyMakeev/chunked_vector)
 
 A high-performance, header-only C++17 chunked vector implementation with comprehensive testing.
 
