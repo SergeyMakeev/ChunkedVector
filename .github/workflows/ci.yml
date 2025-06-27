@@ -223,10 +223,11 @@ jobs:
           lcov --remove coverage.info '*_test.cpp' --output-file coverage.info
           lcov --list coverage.info
 
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v3
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          slug: SergeyMakeev/chunked_vector
           file: ./coverage.info
           flags: unittests
           name: codecov-umbrella
