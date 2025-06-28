@@ -20,12 +20,12 @@ A high-performance, header-only C++17 chunked vector implementation with compreh
 
 Each badge above represents a different aspect of our continuous integration:
 
-[![Linux GCC](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml)
-[![Linux Clang](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml)
-[![macOS](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml)
-[![Windows](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml)
-[![Coverage](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml)
-[![Sanitizers](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml)
+[![Linux GCC](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml)  
+[![Linux Clang](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml)  
+[![macOS](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml)  
+[![Windows](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml)  
+[![Coverage](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml)  
+[![Sanitizers](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml)  
 
 ## Quick Start
 
