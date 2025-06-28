@@ -86,6 +86,49 @@ ctest --output-on-failure
 ./chunked_vector_tests
 ```
 
+## Performance Testing
+
+This project includes comprehensive performance comparison tests between `chunked_vector` and `std::vector` using the ubench framework.
+
+### Building Performance Tests
+
+```bash
+# Build performance tests
+cmake --build build --target performance_test
+```
+
+### Running Performance Tests
+
+```bash
+# Run all performance tests
+./build/Debug/performance_test  # or ./build/Release/performance_test
+
+# Run specific test categories
+./build/Debug/performance_test --filter=push_back
+./build/Debug/performance_test --filter=std_vector
+./build/Debug/performance_test --filter=chunked_vector
+
+# List all available benchmarks
+./build/Debug/performance_test --list-benchmarks
+
+# Output results to CSV
+./build/Debug/performance_test --output=results.csv
+```
+
+### Performance Test Categories
+
+The performance tests cover multiple scenarios:
+
+- **Push Back Operations**: Compare insertion performance at different scales
+- **Access Patterns**: Sequential vs random access performance  
+- **Iterator Performance**: Range-based loops and explicit iteration
+- **Memory Operations**: Reserve, resize, copy operations
+- **STL Algorithm Compatibility**: Performance with standard algorithms
+- **Large Objects**: Behavior with objects expensive to copy/move
+- **Mixed Workloads**: Real-world usage patterns
+
+For detailed information about the performance tests, see [PERFORMANCE_README.md](PERFORMANCE_README.md).
+
 ## Continuous Integration
 
 This project uses GitHub Actions with separate workflows for different testing aspects:

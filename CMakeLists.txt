@@ -4,6 +4,11 @@ project(chunked_vector_tests)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Set default build type for performance
+#if(NOT CMAKE_BUILD_TYPE)
+#  set(CMAKE_BUILD_TYPE Release)
+#endif()
+
 # Include GoogleTest
 include(FetchContent)
 FetchContent_Declare(
@@ -34,6 +39,16 @@ target_link_libraries(chunked_vector_tests
   chunked_vector
 )
 
+# Add performance test executable
+add_executable(performance_test
+  performance_test.cpp
+)
+
+# Link chunked_vector library to performance test
+target_link_libraries(performance_test 
+  chunked_vector
+)
+
 set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT chunked_vector_tests)
 
 # For Windows MSVC
@@ -42,6 +57,7 @@ if(MSVC)
 else()
   # For clang/gcc
   target_compile_options(chunked_vector_tests PRIVATE -Wall -Wextra -pedantic)
+  target_compile_options(performance_test PRIVATE -march=native)
 endif()
 
 # Discover tests - use POST_BUILD mode to avoid CI issues across all platforms
