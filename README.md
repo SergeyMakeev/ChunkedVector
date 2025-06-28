@@ -49,7 +49,7 @@ int main() {
 }
 ```
 
-## Building and Testing
+## Building and Usage
 
 ### Prerequisites
 
@@ -61,7 +61,7 @@ int main() {
 
 ```bash
 # Clone the repository
-git clone https://github.com/[username]/chunked_vector.git
+git clone https://github.com/SergeyMakeev/chunked_vector.git
 cd chunked_vector
 
 # Configure and build
@@ -73,12 +73,16 @@ cd build
 ctest --output-on-failure
 ```
 
-### Running Tests Directly
+### Usage
 
-```bash
-# From build directory
-./chunked_vector_tests
 ```
+# Add the chunked_vector library
+add_subdirectory("path_to_chunked_vector_repo/chunked_vector")
+
+# use chunked_vector library
+target_link_libraries(my_app_name PRIVATE chunked_vector)
+```
+
 
 ## License
 
