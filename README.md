@@ -1,11 +1,5 @@
 # chunked_vector
 
-[![Linux GCC](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml)
-[![Linux Clang](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml)
-[![macOS](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml)
-[![Windows](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml)
-[![Coverage](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml)
-[![Sanitizers](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml)
 [![License](https://img.shields.io/github/license/SergeyMakeev/chunked_vector)](LICENSE)
 [![Language](https://img.shields.io/github/languages/top/SergeyMakeev/chunked_vector)](https://github.com/SergeyMakeev/chunked_vector)
 [![codecov](https://codecov.io/gh/SergeyMakeev/chunked_vector/graph/badge.svg?token=8B80XIGDVT)](https://codecov.io/gh/SergeyMakeev/chunked_vector)
@@ -26,12 +20,12 @@ A high-performance, header-only C++17 chunked vector implementation with compreh
 
 Each badge above represents a different aspect of our continuous integration:
 
-- **Linux GCC**: Tests with GCC 11 (Release & Debug builds)
-- **Linux Clang**: Tests with Clang 14 (Release & Debug builds)  
-- **macOS**: Tests on macOS 13 and latest (Release & Debug builds)
-- **Windows**: Tests with MSVC 2022 and 2019 (Release & Debug builds)
-- **Coverage**: Code coverage analysis with gcov/lcov
-- **Sanitizers**: Memory safety checks (AddressSanitizer, UndefinedBehaviorSanitizer, ThreadSanitizer)
+[![Linux GCC](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml)  
+[![Linux Clang](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml)  
+[![macOS](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml)  
+[![Windows](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml)  
+[![Coverage](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml)  
+[![Sanitizers](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml)  
 
 ## Quick Start
 
@@ -55,7 +49,7 @@ int main() {
 }
 ```
 
-## Building and Testing
+## Building and Usage
 
 ### Prerequisites
 
@@ -67,7 +61,7 @@ int main() {
 
 ```bash
 # Clone the repository
-git clone https://github.com/[username]/chunked_vector.git
+git clone https://github.com/SergeyMakeev/chunked_vector.git
 cd chunked_vector
 
 # Configure and build
@@ -79,66 +73,16 @@ cd build
 ctest --output-on-failure
 ```
 
-### Running Tests Directly
+### Usage
 
-```bash
-# From build directory
-./chunked_vector_tests
+```
+# Add the chunked_vector library
+add_subdirectory("path_to_chunked_vector_repo/chunked_vector")
+
+# use chunked_vector library
+target_link_libraries(my_app_name PRIVATE chunked_vector)
 ```
 
-## Performance Testing
-
-This project includes comprehensive performance comparison tests between `chunked_vector` and `std::vector` using the ubench framework.
-
-### Building Performance Tests
-
-```bash
-# Build performance tests
-cmake --build build --target performance_test
-```
-
-### Running Performance Tests
-
-```bash
-# Run all performance tests
-./build/Debug/performance_test  # or ./build/Release/performance_test
-
-# Run specific test categories
-./build/Debug/performance_test --filter=push_back
-./build/Debug/performance_test --filter=std_vector
-./build/Debug/performance_test --filter=chunked_vector
-
-# List all available benchmarks
-./build/Debug/performance_test --list-benchmarks
-
-# Output results to CSV
-./build/Debug/performance_test --output=results.csv
-```
-
-### Performance Test Categories
-
-The performance tests cover multiple scenarios:
-
-- **Push Back Operations**: Compare insertion performance at different scales
-- **Access Patterns**: Sequential vs random access performance  
-- **Iterator Performance**: Range-based loops and explicit iteration
-- **Memory Operations**: Reserve, resize, copy operations
-- **STL Algorithm Compatibility**: Performance with standard algorithms
-- **Large Objects**: Behavior with objects expensive to copy/move
-- **Mixed Workloads**: Real-world usage patterns
-
-For detailed information about the performance tests, see [PERFORMANCE_README.md](PERFORMANCE_README.md).
-
-## Continuous Integration
-
-This project uses GitHub Actions with separate workflows for different testing aspects:
-
-- **Platform-specific workflows**: Separate workflows for Linux (GCC/Clang), macOS, and Windows
-- **Multiple compilers**: GCC 11, Clang 14, MSVC 2019/2022
-- **Build configurations**: Both Release and Debug builds for all platforms
-- **Code coverage**: Dedicated workflow using gcov/lcov with Codecov integration
-- **Memory safety**: Separate sanitizer workflow with AddressSanitizer, UndefinedBehaviorSanitizer, and ThreadSanitizer
-- **Comprehensive testing**: GoogleTest framework with extensive test coverage across all configurations
 
 ## License
 
