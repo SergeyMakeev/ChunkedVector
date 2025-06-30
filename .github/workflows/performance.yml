@@ -1,0 +1,153 @@
+name: Performance Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  performance:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+              name: "Performance Windows MSVC 2022",
+              os: windows-2022,
+              cc: "cl",
+              cxx: "cl",
+              generator: "Visual Studio 17 2022",
+              executable_suffix: ".exe"
+            }
+          - {
+              name: "Performance Linux GCC 11",
+              os: ubuntu-22.04,
+              cc: "gcc-11",
+              cxx: "g++-11",
+              generator: "Ninja",
+              executable_suffix: ""
+            }
+          - {
+              name: "Performance Linux Clang 14",
+              os: ubuntu-22.04,
+              cc: "clang-14",
+              cxx: "clang++-14", 
+              generator: "Ninja",
+              executable_suffix: ""
+            }
+          - {
+              name: "Performance macOS Latest",
+              os: macos-latest,
+              cc: "clang",
+              cxx: "clang++",
+              generator: "Ninja",
+              executable_suffix: ""
+            }
+          - {
+              name: "Performance macOS 13",
+              os: macos-13,
+              cc: "clang",
+              cxx: "clang++",
+              generator: "Ninja", 
+              executable_suffix: ""
+            }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install ninja
+
+      - name: Setup Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Setup Dependencies (macOS)  
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja
+
+      - name: Setup MSBuild (Windows)
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.25'
+
+      - name: Set Environment Variables (Non-Windows)
+        if: runner.os != 'Windows'
+        run: |
+          echo "CC=${{ matrix.config.cc }}" >> $GITHUB_ENV
+          echo "CXX=${{ matrix.config.cxx }}" >> $GITHUB_ENV
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -B build -G "${{ matrix.config.generator }}" -A x64
+
+      - name: Configure CMake (Non-Windows)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -G "${{ matrix.config.generator }}"
+
+      - name: Build Performance Test
+        run: cmake --build build --config Release --parallel --target performance_test
+
+      - name: Run Performance Tests (Windows)
+        if: runner.os == 'Windows'
+        working-directory: build
+        run: |
+          echo "Running performance tests..."
+          .\Release\performance_test${{ matrix.config.executable_suffix }} > performance_results.txt 2>&1
+          echo "Performance test completed"
+
+      - name: Run Performance Tests (Non-Windows)
+        if: runner.os != 'Windows'
+        working-directory: build
+        run: |
+          echo "Running performance tests..."
+          ./performance_test${{ matrix.config.executable_suffix }} > performance_results.txt 2>&1
+          echo "Performance test completed"
+
+      - name: Display Performance Results
+        working-directory: build
+        shell: bash
+        run: |
+          echo "=== Performance Test Results ==="
+          cat performance_results.txt
+          echo "=== End Performance Results ==="
+
+      - name: Upload Performance Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-results-${{ matrix.config.name }}
+          path: |
+            build/performance_results.txt
+          retention-days: 30
+
+      - name: Check Performance Test Success
+        working-directory: build
+        shell: bash
+        run: |
+          # Check if performance test completed successfully
+          if grep -q "FAILED" performance_results.txt; then
+            echo "Performance tests failed!"
+            exit 1
+          else
+            echo "Performance tests completed successfully"
+          fi 
