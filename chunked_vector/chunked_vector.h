@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <new>
 #include <stdexcept>
 #include <type_traits>
@@ -266,6 +267,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     CHUNKED_VEC_INLINE bool empty() const noexcept { return m_size == 0; }
     CHUNKED_VEC_INLINE size_type size() const noexcept { return m_size; }
     CHUNKED_VEC_INLINE size_type capacity() const noexcept { return m_page_count * PAGE_SIZE; }
+    CHUNKED_VEC_INLINE size_type max_size() const noexcept { return max_page_capacity() * PAGE_SIZE; }
 
     void reserve(size_type new_capacity)
     {
@@ -489,6 +491,38 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     size_type m_page_capacity;
     size_type m_size;
 
+    // Get the maximum number of pages that can be allocated
+    size_type max_page_capacity() const noexcept
+    {
+        // Maximum size_type value divided by pointer size, with some safety margin
+        const size_type max_pointers = std::numeric_limits<size_type>::max() / sizeof(T*);
+        // Leave some room for allocation headers and alignment
+        return max_pointers > 16 ? max_pointers - 16 : max_pointers;
+    }
+
+    // Calculate geometric growth similar to std::vector, but for pages
+    size_type calculate_page_growth(size_type pages_needed) const
+    {
+        const size_type old_capacity = m_page_capacity;
+        const size_type max_capacity = max_page_capacity();
+
+        // Handle overflow case: if old_capacity > max - old_capacity/2
+        if (old_capacity > max_capacity - old_capacity / 2)
+        {
+            return max_capacity; // geometric growth would overflow
+        }
+
+        // Calculate geometric growth: old_capacity + old_capacity/2 (1.5x growth)
+        const size_type geometric = old_capacity + old_capacity / 2;
+
+        if (geometric < pages_needed)
+        {
+            return pages_needed; // geometric growth would be insufficient
+        }
+
+        return geometric; // geometric growth is sufficient
+    }
+
     void ensure_capacity_for_one_more()
     {
         size_type page_idx = m_size / PAGE_SIZE;
@@ -506,11 +540,17 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             return;
         }
 
-        // 8, 16, 32, 64, 128, 256 pages...
-        size_type new_page_capacity = m_page_capacity > 0 ? m_page_capacity + (m_page_capacity >> 1) : 8;
-        if (new_page_capacity < pages_needed)
+        size_type new_page_capacity;
+        
+        if (m_page_capacity == 0)
         {
-            new_page_capacity = pages_needed;
+            // Start with exactly what's needed, but at least 1 page
+            new_page_capacity = pages_needed > 0 ? pages_needed : 1;
+        }
+        else
+        {
+            // Use geometric growth calculation similar to std::vector
+            new_page_capacity = calculate_page_growth(pages_needed);
         }
 
         T** new_pages = static_cast<T**>(CHUNKED_VEC_ALLOC(new_page_capacity * sizeof(T*), safe_alignment_of<T*>));
