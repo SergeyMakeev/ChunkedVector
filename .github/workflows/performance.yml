@@ -18,6 +18,7 @@ jobs:
         config:
           - {
               name: "Performance Windows MSVC 2022",
+              filename: "windows-msvc-2022",
               os: windows-2022,
               cc: "cl",
               cxx: "cl",
@@ -26,6 +27,7 @@ jobs:
             }
           - {
               name: "Performance Linux GCC 11",
+              filename: "linux-gcc-11",
               os: ubuntu-22.04,
               cc: "gcc-11",
               cxx: "g++-11",
@@ -34,6 +36,7 @@ jobs:
             }
           - {
               name: "Performance Linux Clang 14",
+              filename: "linux-clang-14",
               os: ubuntu-22.04,
               cc: "clang-14",
               cxx: "clang++-14", 
@@ -42,6 +45,7 @@ jobs:
             }
           - {
               name: "Performance macOS Latest",
+              filename: "macos-latest",
               os: macos-latest,
               cc: "clang",
               cxx: "clang++",
@@ -50,6 +54,7 @@ jobs:
             }
           - {
               name: "Performance macOS 13",
+              filename: "macos-13",
               os: macos-13,
               cc: "clang",
               cxx: "clang++",
@@ -112,7 +117,7 @@ jobs:
         working-directory: build
         run: |
           echo "Running performance tests..."
-          .\Release\performance_test${{ matrix.config.executable_suffix }} > performance_results_${{ matrix.config.name }}.txt 2>&1
+          .\Release\performance_test${{ matrix.config.executable_suffix }} > performance_results_${{ matrix.config.filename }}.txt 2>&1
           echo "Performance test completed"
 
       - name: Run Performance Tests (Non-Windows)
@@ -120,7 +125,7 @@ jobs:
         working-directory: build
         run: |
           echo "Running performance tests..."
-          ./performance_test${{ matrix.config.executable_suffix }} > performance_results_${{ matrix.config.name }}.txt 2>&1
+          ./performance_test${{ matrix.config.executable_suffix }} > performance_results_${{ matrix.config.filename }}.txt 2>&1
           echo "Performance test completed"
 
       - name: Display Performance Results
@@ -128,7 +133,7 @@ jobs:
         shell: bash
         run: |
           echo "=== Performance Test Results for ${{ matrix.config.name }} ==="
-          cat "performance_results_${{ matrix.config.name }}.txt"
+          cat performance_results_${{ matrix.config.filename }}.txt
           echo "=== End Performance Results ==="
 
       - name: Upload Performance Results
@@ -137,7 +142,7 @@ jobs:
         with:
           name: performance-results-all-platforms
           path: |
-            build/performance_results_${{ matrix.config.name }}.txt
+            build/performance_results_${{ matrix.config.filename }}.txt
           retention-days: 30
 
       - name: Check Performance Test Success
@@ -145,7 +150,7 @@ jobs:
         shell: bash
         run: |
           # Check if performance test completed successfully
-          if grep -q "FAILED" "performance_results_${{ matrix.config.name }}.txt"; then
+          if grep -q "FAILED" performance_results_${{ matrix.config.filename }}.txt; then
             echo "Performance tests failed!"
             exit 1
           else
