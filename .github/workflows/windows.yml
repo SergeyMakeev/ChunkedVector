@@ -32,14 +32,6 @@ jobs:
               build_type: "Debug",
               generator: "Visual Studio 17 2022"
             }
-          - {
-              name: "MSVC 2019 Release",
-              os: windows-latest,
-              cc: "cl",
-              cxx: "cl", 
-              build_type: "Release",
-              generator: "Visual Studio 16 2019"
-            }
 
     steps:
       - name: Checkout
