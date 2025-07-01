@@ -34,7 +34,7 @@ jobs:
             }
           - {
               name: "MSVC 2019 Release",
-              os: windows-2019,
+              os: windows-latest,
               cc: "cl",
               cxx: "cl", 
               build_type: "Release",
