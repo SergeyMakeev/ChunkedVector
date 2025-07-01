@@ -9,6 +9,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #  set(CMAKE_BUILD_TYPE Release)
 #endif()
 
+# Fetch ubench.h
+include(FetchContent)
+FetchContent_Declare(
+  ubench
+  GIT_REPOSITORY https://github.com/sheredom/ubench.h.git
+  GIT_TAG        master
+)
+FetchContent_MakeAvailable(ubench)
+
+include_directories(${ubench_SOURCE_DIR})
+
+
 # Include GoogleTest
 include(FetchContent)
 FetchContent_Declare(
