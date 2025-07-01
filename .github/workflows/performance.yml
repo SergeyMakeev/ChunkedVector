@@ -112,7 +112,7 @@ jobs:
         working-directory: build
         run: |
           echo "Running performance tests..."
-          .\Release\performance_test${{ matrix.config.executable_suffix }} > performance_results.txt 2>&1
+          .\Release\performance_test${{ matrix.config.executable_suffix }} > performance_results_${{ matrix.config.name }}.txt 2>&1
           echo "Performance test completed"
 
       - name: Run Performance Tests (Non-Windows)
@@ -120,24 +120,24 @@ jobs:
         working-directory: build
         run: |
           echo "Running performance tests..."
-          ./performance_test${{ matrix.config.executable_suffix }} > performance_results.txt 2>&1
+          ./performance_test${{ matrix.config.executable_suffix }} > performance_results_${{ matrix.config.name }}.txt 2>&1
           echo "Performance test completed"
 
       - name: Display Performance Results
         working-directory: build
         shell: bash
         run: |
-          echo "=== Performance Test Results ==="
-          cat performance_results.txt
+          echo "=== Performance Test Results for ${{ matrix.config.name }} ==="
+          cat "performance_results_${{ matrix.config.name }}.txt"
           echo "=== End Performance Results ==="
 
       - name: Upload Performance Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: performance-results-${{ matrix.config.name }}
+          name: performance-results-all-platforms
           path: |
-            build/performance_results.txt
+            build/performance_results_${{ matrix.config.name }}.txt
           retention-days: 30
 
       - name: Check Performance Test Success
@@ -145,7 +145,7 @@ jobs:
         shell: bash
         run: |
           # Check if performance test completed successfully
-          if grep -q "FAILED" performance_results.txt; then
+          if grep -q "FAILED" "performance_results_${{ matrix.config.name }}.txt"; then
             echo "Performance tests failed!"
             exit 1
           else
