@@ -144,6 +144,7 @@ jobs:
           path: |
             build/performance_results_${{ matrix.config.filename }}.txt
           retention-days: 30
+          merge-multiple: true
 
       - name: Check Performance Test Success
         working-directory: build
