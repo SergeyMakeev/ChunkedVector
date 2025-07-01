@@ -48,16 +48,21 @@ jobs:
       - name: Generate Coverage Report
         run: |
           lcov --directory build --capture --output-file coverage.info
-          lcov --extract coverage.info '*/chunked_vector/chunked_vector.h' --output-file coverage.info
-          lcov --list coverage.info
+          lcov --extract coverage.info '*/chunked_vector/chunked_vector.h' --output-file coverage_filtered.info
+          lcov --list coverage_filtered.info
+          echo "=== Coverage file contents ==="
+          cat coverage_filtered.info
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: SergeyMakeev/chunked_vector
-          file: ./coverage.info
+          file: ./coverage_filtered.info
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
-          disable_search: true 
+          disable_search: true
+          override_branch: ${{ github.ref_name }}
+          override_build: ${{ github.run_number }}
+          override_commit: ${{ github.sha }} 
