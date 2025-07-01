@@ -140,11 +140,10 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: performance-results-all-platforms
+          name: performance-results-${{ matrix.config.filename }}
           path: |
             build/performance_results_${{ matrix.config.filename }}.txt
-          retention-days: 30
-          merge-multiple: true
+          retention-days: 1
 
       - name: Check Performance Test Success
         working-directory: build
@@ -156,4 +155,57 @@ jobs:
             exit 1
           else
             echo "Performance tests completed successfully"
-          fi 
+          fi
+
+  combine-results:
+    name: Combine Performance Results
+    runs-on: ubuntu-latest
+    needs: performance
+    if: always()
+    
+    steps:
+      - name: Download All Performance Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: performance-results
+          pattern: performance-results-*
+          merge-multiple: true
+
+      - name: List Downloaded Files
+        run: |
+          echo "=== Downloaded Performance Results ==="
+          ls -la performance-results/
+          echo "=== File Contents Preview ==="
+          for file in performance-results/*.txt; do
+            if [ -f "$file" ]; then
+              echo "--- $(basename "$file") ---"
+              head -10 "$file"
+              echo ""
+            fi
+          done
+
+      - name: Combine All Results
+        run: |
+          mkdir -p combined-results
+          echo "# Performance Test Results - All Platforms" > combined-results/README.md
+          echo "" >> combined-results/README.md
+          echo "This artifact contains performance test results from all platforms:" >> combined-results/README.md
+          echo "" >> combined-results/README.md
+          
+          for file in performance-results/*.txt; do
+            if [ -f "$file" ]; then
+              platform=$(basename "$file" .txt | sed 's/performance_results_//')
+              echo "- $platform" >> combined-results/README.md
+              cp "$file" combined-results/
+            fi
+          done
+          
+          echo "" >> combined-results/README.md
+          echo "Generated on: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> combined-results/README.md
+
+      - name: Upload Combined Performance Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results-all-platforms
+          path: combined-results/
+          retention-days: 30 
