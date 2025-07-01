@@ -48,10 +48,7 @@ jobs:
       - name: Generate Coverage Report
         run: |
           lcov --directory build --capture --output-file coverage.info
-          lcov --remove coverage.info '/usr/*' --output-file coverage.info
-          lcov --remove coverage.info '*/googletest/*' --output-file coverage.info
-          lcov --remove coverage.info '*/test/*' --output-file coverage.info
-          lcov --remove coverage.info '*_test.cpp' --output-file coverage.info
+          lcov --extract coverage.info '*/chunked_vector/chunked_vector.h' --output-file coverage.info
           lcov --list coverage.info
 
       - name: Upload coverage reports to Codecov
