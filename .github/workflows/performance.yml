@@ -117,7 +117,7 @@ jobs:
         working-directory: build
         run: |
           echo "Running performance tests..."
-          .\Release\performance_test${{ matrix.config.executable_suffix }} > performance_results_${{ matrix.config.filename }}.txt 2>&1
+          .\Release\performance_test${{ matrix.config.executable_suffix }} --confidence=75 > performance_results_${{ matrix.config.filename }}.txt 2>&1
           echo "Performance test completed"
 
       - name: Run Performance Tests (Non-Windows)
@@ -125,7 +125,7 @@ jobs:
         working-directory: build
         run: |
           echo "Running performance tests..."
-          ./performance_test${{ matrix.config.executable_suffix }} > performance_results_${{ matrix.config.filename }}.txt 2>&1
+          ./performance_test${{ matrix.config.executable_suffix }} --confidence=75 > performance_results_${{ matrix.config.filename }}.txt 2>&1
           echo "Performance test completed"
 
       - name: Display Performance Results
