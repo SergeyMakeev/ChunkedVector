@@ -382,133 +382,262 @@ void test_page_boundary_access() {
 // Benchmark Instantiations
 // =============================================================================
 
-// Push Back Performance Tests
-UBENCH(push_back_small, std_vector) {
+// Push Back Performance Tests - TestObject
+UBENCH(push_back_small_testobject, std_vector) {
     test_push_back<std::vector<TestObject>>(SMALL_SIZE);
 }
 
-UBENCH(push_back_small, chunked_vector) {
+UBENCH(push_back_small_testobject, chunked_vector) {
     test_push_back<chunked_vector<TestObject>>(SMALL_SIZE);
 }
 
-UBENCH(push_back_medium, std_vector) {
+UBENCH(push_back_medium_testobject, std_vector) {
     test_push_back<std::vector<TestObject>>(MEDIUM_SIZE);
 }
 
-UBENCH(push_back_medium, chunked_vector) {
+UBENCH(push_back_medium_testobject, chunked_vector) {
     test_push_back<chunked_vector<TestObject>>(MEDIUM_SIZE);
 }
 
-UBENCH(push_back_large, std_vector) {
+UBENCH(push_back_large_testobject, std_vector) {
     test_push_back<std::vector<TestObject>>(LARGE_SIZE);
 }
 
-UBENCH(push_back_large, chunked_vector) {
+UBENCH(push_back_large_testobject, chunked_vector) {
     test_push_back<chunked_vector<TestObject>>(LARGE_SIZE);
 }
 
-// Sequential Access Performance Tests
-UBENCH(sequential_access, std_vector) {
+// Push Back Performance Tests - float
+UBENCH(push_back_small_float, std_vector) {
+    test_push_back<std::vector<float>>(SMALL_SIZE);
+}
+
+UBENCH(push_back_small_float, chunked_vector) {
+    test_push_back<chunked_vector<float>>(SMALL_SIZE);
+}
+
+UBENCH(push_back_medium_float, std_vector) {
+    test_push_back<std::vector<float>>(MEDIUM_SIZE);
+}
+
+UBENCH(push_back_medium_float, chunked_vector) {
+    test_push_back<chunked_vector<float>>(MEDIUM_SIZE);
+}
+
+UBENCH(push_back_large_float, std_vector) {
+    test_push_back<std::vector<float>>(LARGE_SIZE);
+}
+
+UBENCH(push_back_large_float, chunked_vector) {
+    test_push_back<chunked_vector<float>>(LARGE_SIZE);
+}
+
+// Sequential Access Performance Tests - TestObject
+UBENCH(sequential_access_testobject, std_vector) {
     test_sequential_access<std::vector<TestObject>>();
 }
 
-UBENCH(sequential_access, chunked_vector) {
+UBENCH(sequential_access_testobject, chunked_vector) {
     test_sequential_access<chunked_vector<TestObject>>();
 }
 
-// Random Access Performance Tests
-UBENCH(random_access, std_vector) {
+// Sequential Access Performance Tests - float
+UBENCH(sequential_access_float, std_vector) {
+    test_sequential_access<std::vector<float>>();
+}
+
+UBENCH(sequential_access_float, chunked_vector) {
+    test_sequential_access<chunked_vector<float>>();
+}
+
+// Random Access Performance Tests - TestObject
+UBENCH(random_access_testobject, std_vector) {
     test_random_access<std::vector<TestObject>>();
 }
 
-UBENCH(random_access, chunked_vector) {
+UBENCH(random_access_testobject, chunked_vector) {
     test_random_access<chunked_vector<TestObject>>();
 }
 
-// Iterator Performance Tests
-UBENCH(iterator_traversal, std_vector) {
+// Random Access Performance Tests - float
+UBENCH(random_access_float, std_vector) {
+    test_random_access<std::vector<float>>();
+}
+
+UBENCH(random_access_float, chunked_vector) {
+    test_random_access<chunked_vector<float>>();
+}
+
+// Iterator Performance Tests - TestObject
+UBENCH(iterator_traversal_testobject, std_vector) {
     test_iterator_traversal<std::vector<TestObject>>();
 }
 
-UBENCH(iterator_traversal, chunked_vector) {
+UBENCH(iterator_traversal_testobject, chunked_vector) {
     test_iterator_traversal<chunked_vector<TestObject>>();
 }
 
-UBENCH(range_based_loop, std_vector) {
+UBENCH(range_based_loop_testobject, std_vector) {
     test_range_based_loop<std::vector<TestObject>>();
 }
 
-UBENCH(range_based_loop, chunked_vector) {
+UBENCH(range_based_loop_testobject, chunked_vector) {
     test_range_based_loop<chunked_vector<TestObject>>();
 }
 
-// Memory Allocation Performance Tests
-UBENCH(reserve_performance, std_vector) {
+// Iterator Performance Tests - float
+UBENCH(iterator_traversal_float, std_vector) {
+    test_iterator_traversal<std::vector<float>>();
+}
+
+UBENCH(iterator_traversal_float, chunked_vector) {
+    test_iterator_traversal<chunked_vector<float>>();
+}
+
+UBENCH(range_based_loop_float, std_vector) {
+    test_range_based_loop<std::vector<float>>();
+}
+
+UBENCH(range_based_loop_float, chunked_vector) {
+    test_range_based_loop<chunked_vector<float>>();
+}
+
+// Memory Allocation Performance Tests - TestObject
+UBENCH(reserve_performance_testobject, std_vector) {
     test_reserve_performance<std::vector<TestObject>>();
 }
 
-UBENCH(reserve_performance, chunked_vector) {
+UBENCH(reserve_performance_testobject, chunked_vector) {
     test_reserve_performance<chunked_vector<TestObject>>();
 }
 
-// Construction Performance Tests
-UBENCH(construct_with_size, std_vector) {
+// Memory Allocation Performance Tests - float
+UBENCH(reserve_performance_float, std_vector) {
+    test_reserve_performance<std::vector<float>>();
+}
+
+UBENCH(reserve_performance_float, chunked_vector) {
+    test_reserve_performance<chunked_vector<float>>();
+}
+
+// Construction Performance Tests - TestObject
+UBENCH(construct_with_size_testobject, std_vector) {
     test_construct_with_size<std::vector<TestObject>>();
 }
 
-UBENCH(construct_with_size, chunked_vector) {
+UBENCH(construct_with_size_testobject, chunked_vector) {
     test_construct_with_size<chunked_vector<TestObject>>();
 }
 
-UBENCH(construct_and_fill, std_vector) {
+UBENCH(construct_and_fill_testobject, std_vector) {
     test_construct_and_fill<std::vector<TestObject>>();
 }
 
-UBENCH(construct_and_fill, chunked_vector) {
+UBENCH(construct_and_fill_testobject, chunked_vector) {
     test_construct_and_fill<chunked_vector<TestObject>>();
 }
 
-// Copy Performance Tests
-UBENCH(copy_constructor, std_vector) {
+// Construction Performance Tests - float
+UBENCH(construct_with_size_float, std_vector) {
+    test_construct_with_size<std::vector<float>>();
+}
+
+UBENCH(construct_with_size_float, chunked_vector) {
+    test_construct_with_size<chunked_vector<float>>();
+}
+
+UBENCH(construct_and_fill_float, std_vector) {
+    test_construct_and_fill<std::vector<float>>();
+}
+
+UBENCH(construct_and_fill_float, chunked_vector) {
+    test_construct_and_fill<chunked_vector<float>>();
+}
+
+// Copy Performance Tests - TestObject
+UBENCH(copy_constructor_testobject, std_vector) {
     test_copy_constructor<std::vector<TestObject>>();
 }
 
-UBENCH(copy_constructor, chunked_vector) {
+UBENCH(copy_constructor_testobject, chunked_vector) {
     test_copy_constructor<chunked_vector<TestObject>>();
 }
 
-UBENCH(copy_assignment, std_vector) {
+UBENCH(copy_assignment_testobject, std_vector) {
     test_copy_assignment<std::vector<TestObject>>();
 }
 
-UBENCH(copy_assignment, chunked_vector) {
+UBENCH(copy_assignment_testobject, chunked_vector) {
     test_copy_assignment<chunked_vector<TestObject>>();
 }
 
-// Resize Performance Tests
-UBENCH(resize_grow, std_vector) {
+// Copy Performance Tests - float
+UBENCH(copy_constructor_float, std_vector) {
+    test_copy_constructor<std::vector<float>>();
+}
+
+UBENCH(copy_constructor_float, chunked_vector) {
+    test_copy_constructor<chunked_vector<float>>();
+}
+
+UBENCH(copy_assignment_float, std_vector) {
+    test_copy_assignment<std::vector<float>>();
+}
+
+UBENCH(copy_assignment_float, chunked_vector) {
+    test_copy_assignment<chunked_vector<float>>();
+}
+
+// Resize Performance Tests - TestObject
+UBENCH(resize_grow_testobject, std_vector) {
     test_resize_grow<std::vector<TestObject>>();
 }
 
-UBENCH(resize_grow, chunked_vector) {
+UBENCH(resize_grow_testobject, chunked_vector) {
     test_resize_grow<chunked_vector<TestObject>>();
 }
 
-UBENCH(resize_shrink, std_vector) {
+UBENCH(resize_shrink_testobject, std_vector) {
     test_resize_shrink<std::vector<TestObject>>();
 }
 
-UBENCH(resize_shrink, chunked_vector) {
+UBENCH(resize_shrink_testobject, chunked_vector) {
     test_resize_shrink<chunked_vector<TestObject>>();
 }
 
-// Mixed Operations Performance Tests
-UBENCH(mixed_operations, std_vector) {
+// Resize Performance Tests - float
+UBENCH(resize_grow_float, std_vector) {
+    test_resize_grow<std::vector<float>>();
+}
+
+UBENCH(resize_grow_float, chunked_vector) {
+    test_resize_grow<chunked_vector<float>>();
+}
+
+UBENCH(resize_shrink_float, std_vector) {
+    test_resize_shrink<std::vector<float>>();
+}
+
+UBENCH(resize_shrink_float, chunked_vector) {
+    test_resize_shrink<chunked_vector<float>>();
+}
+
+// Mixed Operations Performance Tests - TestObject
+UBENCH(mixed_operations_testobject, std_vector) {
     test_mixed_operations<std::vector<TestObject>>();
 }
 
-UBENCH(mixed_operations, chunked_vector) {
+UBENCH(mixed_operations_testobject, chunked_vector) {
     test_mixed_operations<chunked_vector<TestObject>>();
+}
+
+// Mixed Operations Performance Tests - float
+UBENCH(mixed_operations_float, std_vector) {
+    test_mixed_operations<std::vector<float>>();
+}
+
+UBENCH(mixed_operations_float, chunked_vector) {
+    test_mixed_operations<chunked_vector<float>>();
 }
 
 // Large Object Performance Tests
@@ -520,30 +649,56 @@ UBENCH(large_objects, chunked_vector) {
     test_large_objects<chunked_vector<LargeObject>>();
 }
 
-// STL Algorithm Performance Tests
-UBENCH(std_algorithm_find, std_vector) {
+// STL Algorithm Performance Tests - TestObject
+UBENCH(std_algorithm_find_testobject, std_vector) {
     test_std_algorithm_find<std::vector<TestObject>>();
 }
 
-UBENCH(std_algorithm_find, chunked_vector) {
+UBENCH(std_algorithm_find_testobject, chunked_vector) {
     test_std_algorithm_find<chunked_vector<TestObject>>();
 }
 
-UBENCH(std_algorithm_accumulate, std_vector) {
+UBENCH(std_algorithm_accumulate_testobject, std_vector) {
     test_std_algorithm_accumulate<std::vector<TestObject>>();
 }
 
-UBENCH(std_algorithm_accumulate, chunked_vector) {
+UBENCH(std_algorithm_accumulate_testobject, chunked_vector) {
     test_std_algorithm_accumulate<chunked_vector<TestObject>>();
 }
 
-// Memory Pattern Tests
-UBENCH(page_boundary_access, std_vector) {
+// STL Algorithm Performance Tests - float
+UBENCH(std_algorithm_find_float, std_vector) {
+    test_std_algorithm_find<std::vector<float>>();
+}
+
+UBENCH(std_algorithm_find_float, chunked_vector) {
+    test_std_algorithm_find<chunked_vector<float>>();
+}
+
+UBENCH(std_algorithm_accumulate_float, std_vector) {
+    test_std_algorithm_accumulate<std::vector<float>>();
+}
+
+UBENCH(std_algorithm_accumulate_float, chunked_vector) {
+    test_std_algorithm_accumulate<chunked_vector<float>>();
+}
+
+// Memory Pattern Tests - TestObject
+UBENCH(page_boundary_access_testobject, std_vector) {
     test_page_boundary_access<std::vector<TestObject>>();
 }
 
-UBENCH(page_boundary_access, chunked_vector) {
+UBENCH(page_boundary_access_testobject, chunked_vector) {
     test_page_boundary_access<chunked_vector<TestObject>>();
+}
+
+// Memory Pattern Tests - float
+UBENCH(page_boundary_access_float, std_vector) {
+    test_page_boundary_access<std::vector<float>>();
+}
+
+UBENCH(page_boundary_access_float, chunked_vector) {
+    test_page_boundary_access<chunked_vector<float>>();
 }
 
 UBENCH_MAIN(); 
