@@ -535,17 +535,10 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
 
     void ensure_page_capacity(size_type pages_needed)
     {
-        /*
-        We don't need the following check because we always perform a similar check earlier (before calling `ensure_page_capacity`)
-        Therefore, this condition is commented out and replaced with the assert above.         
-        */
-        CHUNKED_VEC_ASSERT(pages_needed > m_page_capacity);
-        /*
         if (pages_needed <= m_page_capacity)
         {
             return;
         }
-        */
 
         size_type new_page_capacity;
         
