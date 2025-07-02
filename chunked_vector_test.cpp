@@ -1,4 +1,5 @@
 #include "chunked_vector/chunked_vector.h"
+#include "test_common.h"
 #include <algorithm>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -16,66 +17,7 @@ class ChunkedVectorTest : public ::testing::Test
     void TearDown() override {}
 };
 
-// Test fixture for custom types
-struct TestObject
-{
-    int value;
-    static int constructor_calls;
-    static int destructor_calls;
-    static int copy_calls;
-    static int move_calls;
-
-    TestObject()
-        : value(0)
-    {
-        ++constructor_calls;
-    }
-    explicit TestObject(int v)
-        : value(v)
-    {
-        ++constructor_calls;
-    }
-    TestObject(const TestObject& other)
-        : value(other.value)
-    {
-        ++copy_calls;
-    }
-    TestObject(TestObject&& other) noexcept
-        : value(other.value)
-    {
-        other.value = -1;
-        ++move_calls;
-    }
-    TestObject& operator=(const TestObject& other)
-    {
-        if (this != &other)
-        {
-            value = other.value;
-            ++copy_calls;
-        }
-        return *this;
-    }
-    TestObject& operator=(TestObject&& other) noexcept
-    {
-        if (this != &other)
-        {
-            value = other.value;
-            other.value = -1;
-            ++move_calls;
-        }
-        return *this;
-    }
-    ~TestObject() { ++destructor_calls; }
-
-    bool operator==(const TestObject& other) const { return value == other.value; }
-    bool operator!=(const TestObject& other) const { return value != other.value; }
-    bool operator<(const TestObject& other) const { return value < other.value; }
-};
-
-int TestObject::constructor_calls = 0;
-int TestObject::destructor_calls = 0;
-int TestObject::copy_calls = 0;
-int TestObject::move_calls = 0;
+// TestObject is now provided by test_common.h
 
 class ChunkedVectorCustomTypeTest : public ::testing::Test
 {
@@ -1673,6 +1615,391 @@ TEST_F(ChunkedVectorTest, AddMultipleElements)
     {
         EXPECT_EQ(vec[i], int(i));
     }
+}
+
+// ============================================================================
+// Container Equivalence Tests
+// ============================================================================
+
+// Test fixture for comparing chunked_vector with std::vector behavior
+class ContainerEquivalenceTest : public ::testing::Test
+{
+  protected:
+    void SetUp() override {}
+    void TearDown() override {}
+    
+    template<typename T>
+    void test_containers_equivalent_push_back(size_t size) {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_push_back(std_vec, size);
+        test_push_back(chunked_vec, size);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_sequential_access() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_sequential_access(std_vec);
+        test_sequential_access(chunked_vec);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_random_access() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_random_access(std_vec);
+        test_random_access(chunked_vec);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_iterator_traversal() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_iterator_traversal(std_vec);
+        test_iterator_traversal(chunked_vec);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_range_based_loop() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_range_based_loop(std_vec);
+        test_range_based_loop(chunked_vec);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_reserve_performance() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_reserve_performance(std_vec);
+        test_reserve_performance(chunked_vec);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_construct_with_size() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_construct_with_size(std_vec, SMALL_SIZE, T(42));
+        test_construct_with_size(chunked_vec, SMALL_SIZE, T(42));
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_construct_and_fill() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_construct_and_fill(std_vec);
+        test_construct_and_fill(chunked_vec);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_copy_operations() {
+        std::vector<T> std_source;
+        chunked_vector<T> chunked_source;
+        
+        // Create identical source containers
+        test_construct_and_fill(std_source);
+        test_construct_and_fill(chunked_source);
+        
+        EXPECT_TRUE(containers_equal(std_source, chunked_source));
+        
+        // Test copy constructor
+        std::vector<T> std_copy;
+        chunked_vector<T> chunked_copy;
+        
+        test_copy_constructor(std_copy, std_source);
+        test_copy_constructor(chunked_copy, chunked_source);
+        
+        EXPECT_TRUE(containers_equal(std_copy, chunked_copy));
+        EXPECT_TRUE(containers_equal_iterators(std_copy, chunked_copy));
+        
+        // Test copy assignment
+        std::vector<T> std_assign;
+        chunked_vector<T> chunked_assign;
+        
+        test_copy_assignment(std_assign, std_source);
+        test_copy_assignment(chunked_assign, chunked_source);
+        
+        EXPECT_TRUE(containers_equal(std_assign, chunked_assign));
+        EXPECT_TRUE(containers_equal_iterators(std_assign, chunked_assign));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_resize_operations() {
+        // Test resize grow
+        std::vector<T> std_vec_grow;
+        chunked_vector<T> chunked_vec_grow;
+        
+        test_resize_grow(std_vec_grow);
+        test_resize_grow(chunked_vec_grow);
+        
+        EXPECT_TRUE(containers_equal(std_vec_grow, chunked_vec_grow));
+        EXPECT_TRUE(containers_equal_iterators(std_vec_grow, chunked_vec_grow));
+        
+        // Test resize shrink
+        std::vector<T> std_vec_shrink;
+        chunked_vector<T> chunked_vec_shrink;
+        
+        test_resize_shrink(std_vec_shrink);
+        test_resize_shrink(chunked_vec_shrink);
+        
+        EXPECT_TRUE(containers_equal(std_vec_shrink, chunked_vec_shrink));
+        EXPECT_TRUE(containers_equal_iterators(std_vec_shrink, chunked_vec_shrink));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_mixed_operations() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_mixed_operations(std_vec);
+        test_mixed_operations(chunked_vec);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_stl_algorithms() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_std_algorithm_find(std_vec);
+        test_std_algorithm_find(chunked_vec);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+        
+        // Test accumulate with fresh containers
+        std::vector<T> std_vec2;
+        chunked_vector<T> chunked_vec2;
+        
+        test_std_algorithm_accumulate(std_vec2);
+        test_std_algorithm_accumulate(chunked_vec2);
+        
+        EXPECT_TRUE(containers_equal(std_vec2, chunked_vec2));
+        EXPECT_TRUE(containers_equal_iterators(std_vec2, chunked_vec2));
+    }
+    
+    template<typename T>
+    void test_containers_equivalent_page_boundary_access() {
+        std::vector<T> std_vec;
+        chunked_vector<T> chunked_vec;
+        
+        test_page_boundary_access(std_vec);
+        test_page_boundary_access(chunked_vec);
+        
+        EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+        EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+    }
+};
+
+// Test equivalence with TestObject
+TEST_F(ContainerEquivalenceTest, PushBackEquivalence_TestObject) {
+    test_containers_equivalent_push_back<TestObject>(SMALL_SIZE);
+    test_containers_equivalent_push_back<TestObject>(1000);
+}
+
+TEST_F(ContainerEquivalenceTest, PushBackEquivalence_Float) {
+    test_containers_equivalent_push_back<float>(SMALL_SIZE);
+    test_containers_equivalent_push_back<float>(1000);
+}
+
+TEST_F(ContainerEquivalenceTest, SequentialAccessEquivalence_TestObject) {
+    test_containers_equivalent_sequential_access<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, SequentialAccessEquivalence_Float) {
+    test_containers_equivalent_sequential_access<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, RandomAccessEquivalence_TestObject) {
+    test_containers_equivalent_random_access<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, RandomAccessEquivalence_Float) {
+    test_containers_equivalent_random_access<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, IteratorTraversalEquivalence_TestObject) {
+    test_containers_equivalent_iterator_traversal<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, IteratorTraversalEquivalence_Float) {
+    test_containers_equivalent_iterator_traversal<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, RangeBasedLoopEquivalence_TestObject) {
+    test_containers_equivalent_range_based_loop<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, RangeBasedLoopEquivalence_Float) {
+    test_containers_equivalent_range_based_loop<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, ReservePerformanceEquivalence_TestObject) {
+    test_containers_equivalent_reserve_performance<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, ReservePerformanceEquivalence_Float) {
+    test_containers_equivalent_reserve_performance<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, ConstructWithSizeEquivalence_TestObject) {
+    test_containers_equivalent_construct_with_size<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, ConstructWithSizeEquivalence_Float) {
+    test_containers_equivalent_construct_with_size<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, ConstructAndFillEquivalence_TestObject) {
+    test_containers_equivalent_construct_and_fill<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, ConstructAndFillEquivalence_Float) {
+    test_containers_equivalent_construct_and_fill<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, CopyOperationsEquivalence_TestObject) {
+    test_containers_equivalent_copy_operations<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, CopyOperationsEquivalence_Float) {
+    test_containers_equivalent_copy_operations<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, ResizeOperationsEquivalence_TestObject) {
+    test_containers_equivalent_resize_operations<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, ResizeOperationsEquivalence_Float) {
+    test_containers_equivalent_resize_operations<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, MixedOperationsEquivalence_TestObject) {
+    test_containers_equivalent_mixed_operations<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, MixedOperationsEquivalence_Float) {
+    test_containers_equivalent_mixed_operations<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, STLAlgorithmsEquivalence_TestObject) {
+    test_containers_equivalent_stl_algorithms<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, STLAlgorithmsEquivalence_Float) {
+    test_containers_equivalent_stl_algorithms<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, PageBoundaryAccessEquivalence_TestObject) {
+    test_containers_equivalent_page_boundary_access<TestObject>();
+}
+
+TEST_F(ContainerEquivalenceTest, PageBoundaryAccessEquivalence_Float) {
+    test_containers_equivalent_page_boundary_access<float>();
+}
+
+TEST_F(ContainerEquivalenceTest, LargeObjectsEquivalence) {
+    std::vector<LargeObject> std_vec;
+    chunked_vector<LargeObject> chunked_vec;
+    
+    test_large_objects(std_vec);
+    test_large_objects(chunked_vec);
+    
+    EXPECT_TRUE(containers_equal(std_vec, chunked_vec));
+    EXPECT_TRUE(containers_equal_iterators(std_vec, chunked_vec));
+}
+
+// Additional edge case tests for equivalence
+TEST_F(ContainerEquivalenceTest, EdgeCasesEquivalence) {
+    // Test empty containers
+    std::vector<int> std_empty;
+    chunked_vector<int> chunked_empty;
+    EXPECT_TRUE(containers_equal(std_empty, chunked_empty));
+    EXPECT_TRUE(containers_equal_iterators(std_empty, chunked_empty));
+    
+    // Test single element
+    std::vector<int> std_single{42};
+    chunked_vector<int> chunked_single{42};
+    EXPECT_TRUE(containers_equal(std_single, chunked_single));
+    EXPECT_TRUE(containers_equal_iterators(std_single, chunked_single));
+    
+    // Test with different page sizes
+    chunked_vector<int, 4> small_page_vec;
+    std::vector<int> std_vec;
+    
+    for (int i = 0; i < 20; ++i) {
+        small_page_vec.push_back(i);
+        std_vec.push_back(i);
+    }
+    
+    EXPECT_TRUE(containers_equal(std_vec, small_page_vec));
+    EXPECT_TRUE(containers_equal_iterators(std_vec, small_page_vec));
+}
+
+// Test that sizes also remain equivalent during operations
+TEST_F(ContainerEquivalenceTest, SizeEquivalenceTracking) {
+    std::vector<TestObject> std_vec;
+    chunked_vector<TestObject> chunked_vec;
+    
+    // Initial state
+    EXPECT_EQ(std_vec.size(), chunked_vec.size());
+    EXPECT_EQ(std_vec.empty(), chunked_vec.empty());
+    
+    // After adding elements
+    test_push_back(std_vec, 100);
+    test_push_back(chunked_vec, 100);
+    
+    EXPECT_EQ(std_vec.size(), chunked_vec.size());
+    EXPECT_EQ(std_vec.empty(), chunked_vec.empty());
+    
+    // After resize
+    std_vec.resize(50);
+    chunked_vec.resize(50);
+    
+    EXPECT_EQ(std_vec.size(), chunked_vec.size());
+    EXPECT_EQ(std_vec.empty(), chunked_vec.empty());
+    
+    // After clear
+    std_vec.clear();
+    chunked_vec.clear();
+    
+    EXPECT_EQ(std_vec.size(), chunked_vec.size());
+    EXPECT_EQ(std_vec.empty(), chunked_vec.empty());
 }
 
 // Main function is not needed as we use gtest_main
