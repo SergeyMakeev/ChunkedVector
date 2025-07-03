@@ -1,0 +1,2 @@
+Download the artifact from a GitHub Action performance workflow (or run the performance test locally).  
+Place the resulting files into that directory (example filename: `performance_results_windows-msvc-2022.txt`), then run the script `python parse_performance_results.py` to generate the combined results.

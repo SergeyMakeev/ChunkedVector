@@ -5,3 +5,5 @@ codecov_report
 CoverageReport*
 LastCoverageResults.log
 xcode
+perf_results/*.txt
+perf_results/*.csv
