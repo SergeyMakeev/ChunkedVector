@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstring>
 #include <initializer_list>
 #include <iterator>
 #include <limits>
@@ -159,9 +160,19 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         {
             clear();
             reserve(other.m_size);
-            for (size_type i = 0; i < other.m_size; ++i)
+            
+            if constexpr (std::is_trivially_copyable_v<T>)
             {
-                push_back(other[i]);
+                // For trivial types, use optimized bulk copy
+                bulk_copy_from(other);
+            }
+            else
+            {
+                // For non-trivial types, use element-by-element copy
+                for (size_type i = 0; i < other.m_size; ++i)
+                {
+                    push_back(other[i]);
+                }
             }
         }
         return *this;
@@ -302,11 +313,16 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
 
     void clear() noexcept
     {
-        for (size_type i = 0; i < m_size; ++i)
+        if constexpr (!std::is_trivially_destructible_v<T>)
         {
-            auto [page_idx, elem_idx] = get_page_and_element_indices(i);
-            dod::destruct(&m_pages[page_idx][elem_idx]);
+            // Only call destructors for non-trivial types
+            for (size_type i = 0; i < m_size; ++i)
+            {
+                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
+                dod::destruct(&m_pages[page_idx][elem_idx]);
+            }
         }
+        // For trivial types, just reset the size
         m_size = 0;
     }
 
@@ -335,19 +351,30 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     {
         CHUNKED_VEC_ASSERT(m_size > 0 && "Cannot pop from empty chunked_vector");
         --m_size;
-        auto [page_idx, elem_idx] = get_page_and_element_indices(m_size);
-        dod::destruct(&m_pages[page_idx][elem_idx]);
+        
+        if constexpr (!std::is_trivially_destructible_v<T>)
+        {
+            // Only call destructor for non-trivial types
+            auto [page_idx, elem_idx] = get_page_and_element_indices(m_size);
+            dod::destruct(&m_pages[page_idx][elem_idx]);
+        }
+        // For trivial types, no destructor call needed
     }
 
     void resize(size_type count)
     {
         if (count < m_size)
         {
-            for (size_type i = count; i < m_size; ++i)
+            if constexpr (!std::is_trivially_destructible_v<T>)
             {
-                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
-                dod::destruct(&m_pages[page_idx][elem_idx]);
+                // Only call destructors for non-trivial types
+                for (size_type i = count; i < m_size; ++i)
+                {
+                    auto [page_idx, elem_idx] = get_page_and_element_indices(i);
+                    dod::destruct(&m_pages[page_idx][elem_idx]);
+                }
             }
+            // For trivial types, no destructor calls needed
         }
         else if (count > m_size)
         {
@@ -361,11 +388,16 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     {
         if (count < m_size)
         {
-            for (size_type i = count; i < m_size; ++i)
+            if constexpr (!std::is_trivially_destructible_v<T>)
             {
-                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
-                dod::destruct(&m_pages[page_idx][elem_idx]);
+                // Only call destructors for non-trivial types
+                for (size_type i = count; i < m_size; ++i)
+                {
+                    auto [page_idx, elem_idx] = get_page_and_element_indices(i);
+                    dod::destruct(&m_pages[page_idx][elem_idx]);
+                }
             }
+            // For trivial types, no destructor calls needed
         }
         else if (count > m_size)
         {
@@ -629,9 +661,22 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             
             // Construct elements in this page segment
             T* page_ptr = m_pages[page_idx];
-            for (size_type i = 0; i < elements_to_construct; ++i)
+            
+            if constexpr (std::is_trivially_copyable_v<T> && std::is_trivially_constructible_v<T>)
             {
-                dod::construct<T>(&page_ptr[start_elem_idx + i], value);
+                // For trivial types, use optimized bulk operations
+                for (size_type i = 0; i < elements_to_construct; ++i)
+                {
+                    page_ptr[start_elem_idx + i] = value;
+                }
+            }
+            else
+            {
+                // For non-trivial types, use placement new
+                for (size_type i = 0; i < elements_to_construct; ++i)
+                {
+                    dod::construct<T>(&page_ptr[start_elem_idx + i], value);
+                }
             }
             
             current_idx += elements_to_construct;
@@ -655,13 +700,50 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             
             // Construct elements in this page segment
             T* page_ptr = m_pages[page_idx];
-            for (size_type i = 0; i < elements_to_construct; ++i)
+            
+            if constexpr (std::is_trivially_default_constructible_v<T> && std::is_trivially_copyable_v<T>)
             {
-                dod::construct<T>(&page_ptr[start_elem_idx + i]);
+                // For trivial types, use memset if default construction is zero-initialization
+                if constexpr (std::is_arithmetic_v<T> || std::is_pointer_v<T>)
+                {
+                    std::memset(&page_ptr[start_elem_idx], 0, elements_to_construct * sizeof(T));
+                }
+                else
+                {
+                    // For other trivial types, use assignment
+                    T default_value{};
+                    for (size_type i = 0; i < elements_to_construct; ++i)
+                    {
+                        page_ptr[start_elem_idx + i] = default_value;
+                    }
+                }
+            }
+            else
+            {
+                // For non-trivial types, use placement new
+                for (size_type i = 0; i < elements_to_construct; ++i)
+                {
+                    dod::construct<T>(&page_ptr[start_elem_idx + i]);
+                }
             }
             
             current_idx += elements_to_construct;
         }
+    }
+
+    // Optimized bulk copy from another chunked_vector (for trivial types)
+    void bulk_copy_from(const chunked_vector& other)
+    {
+        static_assert(std::is_trivially_copyable_v<T>, "bulk_copy_from should only be called for trivial types");
+        
+        for (size_type i = 0; i < other.m_size; ++i)
+        {
+            auto [dst_page_idx, dst_elem_idx] = get_page_and_element_indices(i);
+            auto [src_page_idx, src_elem_idx] = other.get_page_and_element_indices(i);
+            
+            m_pages[dst_page_idx][dst_elem_idx] = other.m_pages[src_page_idx][src_elem_idx];
+        }
+        m_size = other.m_size;
     }
 
   public:
