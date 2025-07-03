@@ -224,7 +224,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         return m_pages[page_idx][elem_idx];
     }
 
-    reference at(size_type pos)
+    CHUNKED_VEC_INLINE reference at(size_type pos)
     {
         if (pos >= m_size)
         {
@@ -233,7 +233,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         return (*this)[pos];
     }
 
-    const_reference at(size_type pos) const
+    CHUNKED_VEC_INLINE const_reference at(size_type pos) const
     {
         if (pos >= m_size)
         {
@@ -281,7 +281,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     CHUNKED_VEC_INLINE size_type capacity() const noexcept { return m_page_count * PAGE_SIZE; }
     CHUNKED_VEC_INLINE size_type max_size() const noexcept { return max_page_capacity() * PAGE_SIZE; }
 
-    void reserve(size_type new_capacity)
+    CHUNKED_VEC_INLINE void reserve(size_type new_capacity)
     {
         if (new_capacity <= capacity())
         {
@@ -312,7 +312,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         m_page_count = pages_needed;
     }
 
-    void clear() noexcept
+    CHUNKED_VEC_INLINE void clear() noexcept
     {
         if constexpr (!std::is_trivially_destructible_v<T>)
         {
@@ -327,17 +327,17 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         m_size = 0;
     }
 
-    void push_back(const T& value)
+    CHUNKED_VEC_INLINE void push_back(const T& value)
     {
         emplace_back(value);
     }
 
-    void push_back(T&& value)
+    CHUNKED_VEC_INLINE void push_back(T&& value)
     {
         emplace_back(std::move(value));
     }
 
-    template <typename... Args> reference emplace_back(Args&&... args)
+    template <typename... Args> CHUNKED_VEC_INLINE reference emplace_back(Args&&... args)
     {
         ensure_capacity_for_one_more();
 
@@ -348,7 +348,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         return *ptr;
     }
 
-    void pop_back()
+    CHUNKED_VEC_INLINE void pop_back()
     {
         CHUNKED_VEC_ASSERT(m_size > 0 && "Cannot pop from empty chunked_vector");
         --m_size;
@@ -548,7 +548,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         return geometric; // geometric growth is sufficient
     }
 
-    void ensure_capacity_for_one_more()
+    CHUNKED_VEC_INLINE void ensure_capacity_for_one_more()
     {
         size_type page_idx = m_size / PAGE_SIZE;
         if (page_idx >= m_page_count)
