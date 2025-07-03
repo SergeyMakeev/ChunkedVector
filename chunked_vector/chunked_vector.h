@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
+#include <algorithm>
 
 #define CHUNKED_VEC_INLINE inline
 
