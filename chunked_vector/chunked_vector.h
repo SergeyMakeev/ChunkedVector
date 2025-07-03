@@ -352,11 +352,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         else if (count > m_size)
         {
             reserve(count);
-            for (size_type i = m_size; i < count; ++i)
-            {
-                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
-                dod::construct<T>(&m_pages[page_idx][elem_idx]);
-            }
+            bulk_construct_default(m_size, count);
         }
         m_size = count;
     }
@@ -374,11 +370,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         else if (count > m_size)
         {
             reserve(count);
-            for (size_type i = m_size; i < count; ++i)
-            {
-                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
-                dod::construct<T>(&m_pages[page_idx][elem_idx], value);
-            }
+            bulk_construct_with_value(m_size, count, value);
         }
         m_size = count;
     }
@@ -620,6 +612,58 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         return {pos / PAGE_SIZE, pos % PAGE_SIZE};
     }
 
+    // Optimized bulk construction with the same value
+    void bulk_construct_with_value(size_type start_idx, size_type end_idx, const T& value)
+    {
+        if (start_idx >= end_idx) return;
+        
+        size_type current_idx = start_idx;
+        
+        while (current_idx < end_idx)
+        {
+            size_type page_idx = current_idx / PAGE_SIZE;
+            size_type start_elem_idx = current_idx % PAGE_SIZE;
+            size_type elements_remaining = end_idx - current_idx;
+            size_type elements_in_page = PAGE_SIZE - start_elem_idx;
+            size_type elements_to_construct = std::min(elements_remaining, elements_in_page);
+            
+            // Construct elements in this page segment
+            T* page_ptr = m_pages[page_idx];
+            for (size_type i = 0; i < elements_to_construct; ++i)
+            {
+                dod::construct<T>(&page_ptr[start_elem_idx + i], value);
+            }
+            
+            current_idx += elements_to_construct;
+        }
+    }
+
+    // Optimized bulk construction with default constructor
+    void bulk_construct_default(size_type start_idx, size_type end_idx)
+    {
+        if (start_idx >= end_idx) return;
+        
+        size_type current_idx = start_idx;
+        
+        while (current_idx < end_idx)
+        {
+            size_type page_idx = current_idx / PAGE_SIZE;
+            size_type start_elem_idx = current_idx % PAGE_SIZE;
+            size_type elements_remaining = end_idx - current_idx;
+            size_type elements_in_page = PAGE_SIZE - start_elem_idx;
+            size_type elements_to_construct = std::min(elements_remaining, elements_in_page);
+            
+            // Construct elements in this page segment
+            T* page_ptr = m_pages[page_idx];
+            for (size_type i = 0; i < elements_to_construct; ++i)
+            {
+                dod::construct<T>(&page_ptr[start_elem_idx + i]);
+            }
+            
+            current_idx += elements_to_construct;
+        }
+    }
+
   public:
     template <typename ValueType> class basic_iterator
     {
@@ -670,8 +714,6 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             return &m_current_page[m_page_element_index];
         }
 
-
-
         basic_iterator& operator++()
         {
             ++m_index;
@@ -690,10 +732,6 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             return temp;
         }
 
-
-
-
-
         bool operator==(const basic_iterator& other) const noexcept
         {
             return m_container == other.m_container && m_index == other.m_index;
@@ -703,8 +741,6 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         {
             return !(*this == other);
         }
-
-
 
       private:
         const chunked_vector* m_container;
