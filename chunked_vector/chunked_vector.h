@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstring>
@@ -10,7 +11,6 @@
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
-#include <algorithm>
 
 #define CHUNKED_VEC_INLINE inline
 
@@ -516,8 +516,35 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     size_type m_page_capacity;
     size_type m_size;
 
+    // Helper function to count trailing zeros (C++17 compatible)
+    static constexpr size_type count_trailing_zeros(size_type value) noexcept
+    {
+        if (value == 0) return 0;
+        
+        size_type count = 0;
+        while ((value & 1) == 0) {
+            value >>= 1;
+            ++count;
+        }
+        return count;
+    }
+
+    // Helper function to calculate page and element indices from linear position
+    CHUNKED_VEC_INLINE std::pair<size_type, size_type> get_page_and_element_indices(size_type pos) const noexcept
+    {
+        // Optimize for power-of-2 page sizes using bit operations
+        if constexpr ((PAGE_SIZE & (PAGE_SIZE - 1)) == 0) {
+            // PAGE_SIZE is a power of 2, use fast bit operations
+            constexpr size_type page_size_bits = count_trailing_zeros(PAGE_SIZE);
+            return {pos >> page_size_bits, pos & (PAGE_SIZE - 1)};
+        } else {
+            // Use regular division and modulo for non-power-of-2 sizes
+            return {pos / PAGE_SIZE, pos % PAGE_SIZE};
+        }
+    }
+
     // Get the maximum number of pages that can be allocated
-    size_type max_page_capacity() const noexcept
+    CHUNKED_VEC_INLINE size_type max_page_capacity() const noexcept
     {
         // Maximum size_type value divided by pointer size, with some safety margin
         const size_type max_pointers = std::numeric_limits<size_type>::max() / sizeof(T*);
@@ -526,7 +553,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     }
 
     // Calculate geometric growth similar to std::vector, but for pages
-    size_type calculate_page_growth(size_type pages_needed) const
+    CHUNKED_VEC_INLINE size_type calculate_page_growth(size_type pages_needed) const
     {
         const size_type old_capacity = m_page_capacity;
         const size_type max_capacity = max_page_capacity();
@@ -558,7 +585,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         }
     }
 
-    void ensure_page_capacity(size_type pages_needed)
+    CHUNKED_VEC_INLINE void ensure_page_capacity(size_type pages_needed)
     {
         if (pages_needed <= m_page_capacity)
         {
@@ -599,7 +626,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         m_page_capacity = new_page_capacity;
     }
 
-    void allocate_page(size_type page_idx)
+    CHUNKED_VEC_INLINE void allocate_page(size_type page_idx)
     {
         CHUNKED_VEC_ASSERT(page_idx < m_page_capacity && "Page index out of capacity");
         CHUNKED_VEC_ASSERT(m_pages[page_idx] == nullptr && "Page already allocated");
@@ -637,12 +664,6 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         }
         m_page_capacity = 0;
         m_page_count = 0;
-    }
-
-    // Helper function to calculate page and element indices from linear position
-    CHUNKED_VEC_INLINE std::pair<size_type, size_type> get_page_and_element_indices(size_type pos) const noexcept
-    {
-        return {pos / PAGE_SIZE, pos % PAGE_SIZE};
     }
 
     // Optimized bulk construction with the same value
@@ -797,18 +818,24 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             return &m_current_page[m_page_element_index];
         }
 
-        basic_iterator& operator++()
+        CHUNKED_VEC_INLINE basic_iterator& operator++()
         {
             ++m_index;
             ++m_page_element_index;
-            if (m_page_element_index >= PAGE_SIZE || m_index >= m_container->size())
-            {
+            
+            // Only update page cache if we've crossed a page boundary or reached the end
+            if (m_page_element_index >= PAGE_SIZE) {
                 update_page_cache();
+            } else if (m_index >= m_container->size()) {
+                // Reached the end, invalidate cache
+                m_current_page = nullptr;
+                m_page_element_index = 0;
             }
+            
             return *this;
         }
 
-        basic_iterator operator++(int)
+        CHUNKED_VEC_INLINE basic_iterator operator++(int)
         {
             basic_iterator temp = *this;
             ++(*this);
@@ -831,7 +858,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         ValueType* m_current_page;
         size_type m_page_element_index;
 
-        void update_page_cache()
+        CHUNKED_VEC_INLINE void update_page_cache()
         {
             if (!m_container || m_index >= m_container->size())
             {
