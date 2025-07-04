@@ -169,10 +169,19 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             }
             else
             {
-                // For non-trivial types, use element-by-element copy
-                for (size_type i = 0; i < other.m_size; ++i)
+                // For non-trivial types, use page-by-page copy to avoid redundant index calculations
+                size_type remaining_elements = other.m_size;
+                for (size_type page_idx = 0; page_idx < other.m_page_count && remaining_elements > 0; ++page_idx)
                 {
-                    push_back(other[i]);
+                    size_type elements_in_this_page = std::min(remaining_elements, PAGE_SIZE);
+                    const T* src_page = other.m_pages[page_idx];
+                    
+                    for (size_type elem_idx = 0; elem_idx < elements_in_this_page; ++elem_idx)
+                    {
+                        push_back(src_page[elem_idx]);
+                    }
+                    
+                    remaining_elements -= elements_in_this_page;
                 }
             }
         }
@@ -458,17 +467,35 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         auto [page_idx, elem_idx] = get_page_and_element_indices(erase_idx);
         dod::destruct(&m_pages[page_idx][elem_idx]);
         
-        // Move all elements after the erase position one position forward
-        for (size_type i = erase_idx; i < m_size - 1; ++i)
+        // Move all elements after the erase position one position forward using page-by-page iteration
+        size_type elements_to_move = m_size - 1 - erase_idx;
+        size_type src_idx = erase_idx + 1;
+        size_type dst_idx = erase_idx;
+        
+        while (elements_to_move > 0)
         {
-            size_type src_page = (i + 1) / PAGE_SIZE;
-            size_type src_elem = (i + 1) % PAGE_SIZE;
-            size_type dst_page = i / PAGE_SIZE;
-            size_type dst_elem = i % PAGE_SIZE;
+            size_type src_page = src_idx / PAGE_SIZE;
+            size_type src_elem = src_idx % PAGE_SIZE;
+            size_type dst_page = dst_idx / PAGE_SIZE;
+            size_type dst_elem = dst_idx % PAGE_SIZE;
             
-            // Move construct at destination and destruct source
-            dod::construct<T>(&m_pages[dst_page][dst_elem], std::move(m_pages[src_page][src_elem]));
-            dod::destruct(&m_pages[src_page][src_elem]);
+            size_type src_elements_in_page = PAGE_SIZE - src_elem;
+            size_type dst_elements_in_page = PAGE_SIZE - dst_elem;
+            size_type elements_to_move_in_batch = std::min({elements_to_move, src_elements_in_page, dst_elements_in_page});
+            
+            T* src_page_ptr = m_pages[src_page];
+            T* dst_page_ptr = m_pages[dst_page];
+            
+            for (size_type i = 0; i < elements_to_move_in_batch; ++i)
+            {
+                // Move construct at destination and destruct source
+                dod::construct<T>(&dst_page_ptr[dst_elem + i], std::move(src_page_ptr[src_elem + i]));
+                dod::destruct(&src_page_ptr[src_elem + i]);
+            }
+            
+            src_idx += elements_to_move_in_batch;
+            dst_idx += elements_to_move_in_batch;
+            elements_to_move -= elements_to_move_in_batch;
         }
         
         --m_size;
@@ -490,26 +517,56 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         size_type last_idx = last.m_index;
         size_type erase_count = last_idx - first_idx;
         
-        // Destroy elements in the range [first, last)
-        for (size_type i = first_idx; i < last_idx; ++i)
+        // Destroy elements in the range [first, last) using page-by-page iteration
+        size_type destroy_idx = first_idx;
+        size_type elements_to_destroy = erase_count;
+        
+        while (elements_to_destroy > 0)
         {
-            size_type page_idx = i / PAGE_SIZE;
-            size_type elem_idx = i % PAGE_SIZE;
-            dod::destruct(&m_pages[page_idx][elem_idx]);
+            size_type page_idx = destroy_idx / PAGE_SIZE;
+            size_type start_elem_idx = destroy_idx % PAGE_SIZE;
+            size_type elements_in_page = PAGE_SIZE - start_elem_idx;
+            size_type elements_to_destroy_in_page = std::min(elements_to_destroy, elements_in_page);
+            
+            T* page = m_pages[page_idx];
+            for (size_type elem_idx = start_elem_idx; elem_idx < start_elem_idx + elements_to_destroy_in_page; ++elem_idx)
+            {
+                dod::destruct(&page[elem_idx]);
+            }
+            
+            destroy_idx += elements_to_destroy_in_page;
+            elements_to_destroy -= elements_to_destroy_in_page;
         }
         
-        // Move elements after last to fill the gap
-        for (size_type i = last_idx; i < m_size; ++i)
+        // Move elements after last to fill the gap using page-by-page iteration
+        size_type elements_to_move = m_size - last_idx;
+        size_type src_idx = last_idx;
+        size_type dst_idx = first_idx;
+        
+        while (elements_to_move > 0)
         {
-            size_type src_page = i / PAGE_SIZE;
-            size_type src_elem = i % PAGE_SIZE;
-            size_type dst_idx = i - erase_count;
+            size_type src_page = src_idx / PAGE_SIZE;
+            size_type src_elem = src_idx % PAGE_SIZE;
             size_type dst_page = dst_idx / PAGE_SIZE;
             size_type dst_elem = dst_idx % PAGE_SIZE;
             
-            // Move construct at destination and destruct source
-            dod::construct<T>(&m_pages[dst_page][dst_elem], std::move(m_pages[src_page][src_elem]));
-            dod::destruct(&m_pages[src_page][src_elem]);
+            size_type src_elements_in_page = PAGE_SIZE - src_elem;
+            size_type dst_elements_in_page = PAGE_SIZE - dst_elem;
+            size_type elements_to_move_in_batch = std::min({elements_to_move, src_elements_in_page, dst_elements_in_page});
+            
+            T* src_page_ptr = m_pages[src_page];
+            T* dst_page_ptr = m_pages[dst_page];
+            
+            for (size_type i = 0; i < elements_to_move_in_batch; ++i)
+            {
+                // Move construct at destination and destruct source
+                dod::construct<T>(&dst_page_ptr[dst_elem + i], std::move(src_page_ptr[src_elem + i]));
+                dod::destruct(&src_page_ptr[src_elem + i]);
+            }
+            
+            src_idx += elements_to_move_in_batch;
+            dst_idx += elements_to_move_in_batch;
+            elements_to_move -= elements_to_move_in_batch;
         }
         
         m_size -= erase_count;
@@ -797,12 +854,21 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     {
         static_assert(std::is_trivially_copyable_v<T>, "bulk_copy_from should only be called for trivial types");
         
-        for (size_type i = 0; i < other.m_size; ++i)
+        // Optimize by iterating over pages first, then elements within each page
+        size_type remaining_elements = other.m_size;
+        size_type current_idx = 0;
+        
+        for (size_type page_idx = 0; page_idx < other.m_page_count && remaining_elements > 0; ++page_idx)
         {
-            auto [dst_page_idx, dst_elem_idx] = get_page_and_element_indices(i);
-            auto [src_page_idx, src_elem_idx] = other.get_page_and_element_indices(i);
+            size_type elements_in_this_page = std::min(remaining_elements, PAGE_SIZE);
+            T* dst_page = m_pages[page_idx];
+            const T* src_page = other.m_pages[page_idx];
             
-            m_pages[dst_page_idx][dst_elem_idx] = other.m_pages[src_page_idx][src_elem_idx];
+            // Copy elements within this page using memcpy for better performance
+            std::memcpy(dst_page, src_page, elements_in_this_page * sizeof(T));
+            
+            remaining_elements -= elements_in_this_page;
+            current_idx += elements_in_this_page;
         }
         m_size = other.m_size;
     }
