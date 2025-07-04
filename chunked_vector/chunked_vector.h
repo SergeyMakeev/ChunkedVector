@@ -25,7 +25,11 @@
 #else
 // Posix
 #include <stdlib.h>
-#define CHUNKED_VEC_ALLOC(sizeInBytes, alignment) aligned_alloc(alignment, sizeInBytes)
+// Helper to round up size to be a multiple of alignment (required by aligned_alloc)
+inline size_t round_up_to_alignment(size_t size, size_t alignment) noexcept {
+    return ((size + alignment - 1) / alignment) * alignment;
+}
+#define CHUNKED_VEC_ALLOC(sizeInBytes, alignment) aligned_alloc(alignment, round_up_to_alignment(sizeInBytes, alignment))
 #define CHUNKED_VEC_FREE(ptr) free(ptr)
 #endif
 
