@@ -221,7 +221,7 @@ jobs:
         run: |
           echo "Verifying debug level ${{ matrix.config.debug_level }} configuration"
           if [ "$RUNNER_OS" = "Windows" ]; then
-            .\${{ matrix.config.build_type }}\chunked_vector_tests.exe --gtest_filter="*CompileTimeCheck*"
+            ./${{ matrix.config.build_type }}/chunked_vector_tests.exe --gtest_filter="*CompileTimeCheck*"
           else
             ./chunked_vector_tests --gtest_filter="*CompileTimeCheck*"
           fi
