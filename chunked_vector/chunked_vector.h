@@ -317,10 +317,19 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         if constexpr (!std::is_trivially_destructible_v<T>)
         {
             // Only call destructors for non-trivial types
-            for (size_type i = 0; i < m_size; ++i)
+            // Optimize by iterating over pages first, then elements within each page
+            size_type remaining_elements = m_size;
+            for (size_type page_idx = 0; page_idx < m_page_count && remaining_elements > 0; ++page_idx)
             {
-                auto [page_idx, elem_idx] = get_page_and_element_indices(i);
-                dod::destruct(&m_pages[page_idx][elem_idx]);
+                size_type elements_in_this_page = std::min(remaining_elements, PAGE_SIZE);
+                T* page = m_pages[page_idx];
+                
+                for (size_type elem_idx = 0; elem_idx < elements_in_this_page; ++elem_idx)
+                {
+                    dod::destruct(&page[elem_idx]);
+                }
+                
+                remaining_elements -= elements_in_this_page;
             }
         }
         // For trivial types, just reset the size
@@ -369,10 +378,25 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             if constexpr (!std::is_trivially_destructible_v<T>)
             {
                 // Only call destructors for non-trivial types
-                for (size_type i = count; i < m_size; ++i)
+                // Optimize by iterating over pages, starting from the element at 'count'
+                size_type start_idx = count;
+                size_type elements_to_destroy = m_size - count;
+                
+                while (elements_to_destroy > 0)
                 {
-                    auto [page_idx, elem_idx] = get_page_and_element_indices(i);
-                    dod::destruct(&m_pages[page_idx][elem_idx]);
+                    size_type page_idx = start_idx / PAGE_SIZE;
+                    size_type start_elem_idx = start_idx % PAGE_SIZE;
+                    size_type elements_in_page = PAGE_SIZE - start_elem_idx;
+                    size_type elements_to_destroy_in_page = std::min(elements_to_destroy, elements_in_page);
+                    
+                    T* page = m_pages[page_idx];
+                    for (size_type elem_idx = start_elem_idx; elem_idx < start_elem_idx + elements_to_destroy_in_page; ++elem_idx)
+                    {
+                        dod::destruct(&page[elem_idx]);
+                    }
+                    
+                    start_idx += elements_to_destroy_in_page;
+                    elements_to_destroy -= elements_to_destroy_in_page;
                 }
             }
             // For trivial types, no destructor calls needed
@@ -392,10 +416,25 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             if constexpr (!std::is_trivially_destructible_v<T>)
             {
                 // Only call destructors for non-trivial types
-                for (size_type i = count; i < m_size; ++i)
+                // Optimize by iterating over pages, starting from the element at 'count'
+                size_type start_idx = count;
+                size_type elements_to_destroy = m_size - count;
+                
+                while (elements_to_destroy > 0)
                 {
-                    auto [page_idx, elem_idx] = get_page_and_element_indices(i);
-                    dod::destruct(&m_pages[page_idx][elem_idx]);
+                    size_type page_idx = start_idx / PAGE_SIZE;
+                    size_type start_elem_idx = start_idx % PAGE_SIZE;
+                    size_type elements_in_page = PAGE_SIZE - start_elem_idx;
+                    size_type elements_to_destroy_in_page = std::min(elements_to_destroy, elements_in_page);
+                    
+                    T* page = m_pages[page_idx];
+                    for (size_type elem_idx = start_elem_idx; elem_idx < start_elem_idx + elements_to_destroy_in_page; ++elem_idx)
+                    {
+                        dod::destruct(&page[elem_idx]);
+                    }
+                    
+                    start_idx += elements_to_destroy_in_page;
+                    elements_to_destroy -= elements_to_destroy_in_page;
                 }
             }
             // For trivial types, no destructor calls needed
