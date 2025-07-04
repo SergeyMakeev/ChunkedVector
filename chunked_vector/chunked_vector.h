@@ -50,7 +50,11 @@ inline size_t round_up_to_alignment(size_t size, size_t alignment) noexcept {
     #if defined(_ITERATOR_DEBUG_LEVEL)
         #define CHUNKED_VEC_ITERATOR_DEBUG_LEVEL _ITERATOR_DEBUG_LEVEL
     #else
-        #define CHUNKED_VEC_ITERATOR_DEBUG_LEVEL 0
+        #if defined(_DEBUG) || defined(DEBUG) || !defined(NDEBUG)
+            #define CHUNKED_VEC_ITERATOR_DEBUG_LEVEL 2
+        #else
+            #define CHUNKED_VEC_ITERATOR_DEBUG_LEVEL 0
+        #endif
     #endif
 #endif
 
