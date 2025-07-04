@@ -42,6 +42,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # Add chunked vector test executable
 add_executable(chunked_vector_tests
   chunked_vector_test.cpp
+  test_iterator_debug.cpp
 )
 
 # Link Google Test and chunked_vector
@@ -65,11 +66,12 @@ set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT chunked_v
 
 # For Windows MSVC
 if(MSVC)
-  target_compile_options(chunked_vector_tests PRIVATE /W4 /permissive-)
+  target_compile_options(chunked_vector_tests PRIVATE /W4 /permissive- /EHsc)
+  target_compile_options(performance_test PRIVATE /EHsc)
 else()
   # For clang/gcc
-  target_compile_options(chunked_vector_tests PRIVATE -Wall -Wextra -pedantic)
-  target_compile_options(performance_test PRIVATE -march=native)
+  target_compile_options(chunked_vector_tests PRIVATE -Wall -Wextra -pedantic -fexceptions)
+  target_compile_options(performance_test PRIVATE -march=native -fexceptions)
 endif()
 
 # Discover tests - use POST_BUILD mode to avoid CI issues across all platforms

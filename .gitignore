@@ -7,3 +7,6 @@ LastCoverageResults.log
 xcode
 perf_results/*.txt
 perf_results/*.csv
+build_debug0
+build_debug1
+build_debug2
