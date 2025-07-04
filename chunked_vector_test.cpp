@@ -2003,3 +2003,964 @@ TEST_F(ContainerEquivalenceTest, SizeEquivalenceTracking) {
 }
 
 // Main function is not needed as we use gtest_main
+
+// ============================================================================
+// Page-by-Page Optimization Coverage Tests
+// ============================================================================
+
+class PageByPageOptimizationTest : public ::testing::Test
+{
+  protected:
+    void SetUp() override
+    {
+        TestObject::constructor_calls = 0;
+        TestObject::destructor_calls = 0;
+        TestObject::copy_calls = 0;
+        TestObject::move_calls = 0;
+    }
+    void TearDown() override {}
+};
+
+// Test optimized clear() with non-trivial types across multiple pages
+TEST_F(PageByPageOptimizationTest, ClearNonTrivialMultiplePages)
+{
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Fill multiple pages with non-trivial objects
+    const size_t num_elements = PAGE_SIZE * 3 + 2; // 3 full pages + 2 elements
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        vec.emplace_back(static_cast<int>(i * 10));
+    }
+    
+    EXPECT_EQ(vec.size(), num_elements);
+    int destructors_before = TestObject::destructor_calls;
+    
+    // Clear should use page-by-page optimization
+    vec.clear();
+    
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.size(), 0);
+    
+    // Should have called destructors for all elements
+    EXPECT_EQ(TestObject::destructor_calls - destructors_before, static_cast<int>(num_elements));
+}
+
+// Test optimized clear() with trivial types (should not call destructors)
+TEST_F(PageByPageOptimizationTest, ClearTrivialMultiplePages)
+{
+    constexpr size_t PAGE_SIZE = 8;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Fill multiple pages
+    const size_t num_elements = PAGE_SIZE * 5 + 3;
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        vec.push_back(static_cast<int>(i));
+    }
+    
+    EXPECT_EQ(vec.size(), num_elements);
+    
+    // Clear should use optimized path for trivial types (no destructor calls)
+    vec.clear();
+    
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.size(), 0);
+}
+
+// Test optimized resize shrink with non-trivial types across multiple pages
+TEST_F(PageByPageOptimizationTest, ResizeShrinkNonTrivialMultiplePages)
+{
+    constexpr size_t PAGE_SIZE = 6;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Fill multiple pages
+    const size_t initial_size = PAGE_SIZE * 4 + 1; // 4 full pages + 1 element
+    for (size_t i = 0; i < initial_size; ++i)
+    {
+        vec.emplace_back(static_cast<int>(i * 5));
+    }
+    
+    EXPECT_EQ(vec.size(), initial_size);
+    int destructors_before = TestObject::destructor_calls;
+    
+    // Resize to smaller size (should trigger page-by-page destruction)
+    const size_t new_size = PAGE_SIZE + 3; // 1 full page + 3 elements
+    vec.resize(new_size);
+    
+    EXPECT_EQ(vec.size(), new_size);
+    
+    // Should have called destructors for removed elements
+    size_t destroyed_elements = initial_size - new_size;
+    EXPECT_EQ(TestObject::destructor_calls - destructors_before, static_cast<int>(destroyed_elements));
+    
+    // Verify remaining elements are correct
+    for (size_t i = 0; i < new_size; ++i)
+    {
+        EXPECT_EQ(vec[i].value, static_cast<int>(i * 5));
+    }
+}
+
+// Test optimized resize shrink with value parameter
+TEST_F(PageByPageOptimizationTest, ResizeShrinkWithValueNonTrivialMultiplePages)
+{
+    constexpr size_t PAGE_SIZE = 5;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Fill multiple pages
+    const size_t initial_size = PAGE_SIZE * 3 + 4;
+    for (size_t i = 0; i < initial_size; ++i)
+    {
+        vec.emplace_back(static_cast<int>(i * 7));
+    }
+    
+    int destructors_before = TestObject::destructor_calls;
+    
+    // Resize to smaller size with value (should only destroy, not use the value)
+    const size_t new_size = PAGE_SIZE * 2;
+    TestObject unused_value(999);
+    vec.resize(new_size, unused_value);
+    
+    EXPECT_EQ(vec.size(), new_size);
+    
+    // Should have destroyed the excess elements
+    size_t destroyed_elements = initial_size - new_size;
+    EXPECT_GT(TestObject::destructor_calls - destructors_before, static_cast<int>(destroyed_elements - 1));
+    
+    // Verify remaining elements are original values (not the resize value)
+    for (size_t i = 0; i < new_size; ++i)
+    {
+        EXPECT_EQ(vec[i].value, static_cast<int>(i * 7));
+    }
+}
+
+// Test optimized bulk_copy_from with trivial types (should use memcpy)
+TEST_F(PageByPageOptimizationTest, BulkCopyTrivialTypes)
+{
+    constexpr size_t PAGE_SIZE = 8;
+    chunked_vector<int, PAGE_SIZE> source;
+    
+    // Fill source with multiple pages
+    const size_t num_elements = PAGE_SIZE * 3 + 5;
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        source.push_back(static_cast<int>(i * 2));
+    }
+    
+    // Copy should use optimized bulk_copy_from with memcpy
+    chunked_vector<int, PAGE_SIZE> dest;
+    dest = source;
+    
+    EXPECT_EQ(dest.size(), source.size());
+    
+    // Verify all elements copied correctly
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        EXPECT_EQ(dest[i], source[i]);
+        EXPECT_EQ(dest[i], static_cast<int>(i * 2));
+    }
+}
+
+// Test optimized copy assignment with non-trivial types (page-by-page access)
+TEST_F(PageByPageOptimizationTest, CopyAssignmentNonTrivialTypes)
+{
+    constexpr size_t PAGE_SIZE = 6;
+    chunked_vector<TestObject, PAGE_SIZE> source;
+    
+    // Fill source with multiple pages
+    const size_t num_elements = PAGE_SIZE * 4 + 2;
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        source.emplace_back(static_cast<int>(i * 3));
+    }
+    
+    // Copy assignment should use page-by-page optimization for non-trivial types
+    chunked_vector<TestObject, PAGE_SIZE> dest;
+    dest = source;
+    
+    EXPECT_EQ(dest.size(), source.size());
+    
+    // Verify all elements copied correctly
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        EXPECT_EQ(dest[i].value, source[i].value);
+        EXPECT_EQ(dest[i].value, static_cast<int>(i * 3));
+    }
+}
+
+// Test erase single element with page-by-page move optimization
+TEST_F(PageByPageOptimizationTest, EraseSingleElementMultiplePages)
+{
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Fill multiple pages
+    const size_t num_elements = PAGE_SIZE * 5;
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        vec.emplace_back(static_cast<int>(i * 10));
+    }
+    
+    // Erase element from middle of second page
+    size_t erase_index = PAGE_SIZE + 1;
+    auto it = vec.begin();
+    std::advance(it, erase_index);
+    
+    int destructors_before = TestObject::destructor_calls;
+    auto result_it = vec.erase(it);
+    
+    EXPECT_EQ(vec.size(), num_elements - 1);
+    
+    // Should have called destructors during the move operations
+    EXPECT_GT(TestObject::destructor_calls - destructors_before, 0);
+    
+    // Verify elements shifted correctly
+    for (size_t i = 0; i < erase_index; ++i)
+    {
+        EXPECT_EQ(vec[i].value, static_cast<int>(i * 10));
+    }
+    for (size_t i = erase_index; i < vec.size(); ++i)
+    {
+        EXPECT_EQ(vec[i].value, static_cast<int>((i + 1) * 10));
+    }
+}
+
+// Test erase range with page-by-page optimization
+TEST_F(PageByPageOptimizationTest, EraseRangeMultiplePages)
+{
+    constexpr size_t PAGE_SIZE = 5;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Fill multiple pages
+    const size_t num_elements = PAGE_SIZE * 6;
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        vec.emplace_back(static_cast<int>(i * 5));
+    }
+    
+    // Erase range spanning multiple pages
+    size_t first_index = PAGE_SIZE + 2;     // Middle of second page
+    size_t last_index = PAGE_SIZE * 4 + 1;  // Middle of fifth page
+    
+    auto first_it = vec.begin();
+    auto last_it = vec.begin();
+    std::advance(first_it, first_index);
+    std::advance(last_it, last_index);
+    
+    int destructors_before = TestObject::destructor_calls;
+    auto result_it = vec.erase(first_it, last_it);
+    
+    size_t expected_size = num_elements - (last_index - first_index);
+    EXPECT_EQ(vec.size(), expected_size);
+    
+    // Should have called destructors for both erased and moved elements
+    EXPECT_GT(TestObject::destructor_calls - destructors_before, 0);
+    
+    // Verify elements before erase range are unchanged
+    for (size_t i = 0; i < first_index; ++i)
+    {
+        EXPECT_EQ(vec[i].value, static_cast<int>(i * 5));
+    }
+    
+    // Verify elements after erase range shifted correctly
+    for (size_t i = first_index; i < vec.size(); ++i)
+    {
+        size_t original_index = i + (last_index - first_index);
+        EXPECT_EQ(vec[i].value, static_cast<int>(original_index * 5));
+    }
+}
+
+// Test edge case: resize shrink to exactly page boundary
+TEST_F(PageByPageOptimizationTest, ResizeShrinkToPageBoundary)
+{
+    constexpr size_t PAGE_SIZE = 8;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Fill exactly 3 pages plus some extra
+    const size_t initial_size = PAGE_SIZE * 3 + 5;
+    for (size_t i = 0; i < initial_size; ++i)
+    {
+        vec.emplace_back(static_cast<int>(i));
+    }
+    
+    int destructors_before = TestObject::destructor_calls;
+    
+    // Resize to exactly a page boundary
+    vec.resize(PAGE_SIZE * 2);
+    
+    EXPECT_EQ(vec.size(), PAGE_SIZE * 2);
+    
+    // Should have destroyed the excess elements
+    EXPECT_GT(TestObject::destructor_calls - destructors_before, 0);
+    
+    // Verify remaining elements
+    for (size_t i = 0; i < PAGE_SIZE * 2; ++i)
+    {
+        EXPECT_EQ(vec[i].value, static_cast<int>(i));
+    }
+}
+
+// Test edge case: clear with partial last page
+TEST_F(PageByPageOptimizationTest, ClearWithPartialLastPage)
+{
+    constexpr size_t PAGE_SIZE = 6;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Fill pages with partial last page
+    const size_t num_elements = PAGE_SIZE * 2 + 3; // 2 full pages + 3 elements
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        vec.emplace_back(static_cast<int>(i * 7));
+    }
+    
+    int destructors_before = TestObject::destructor_calls;
+    
+    vec.clear();
+    
+    EXPECT_TRUE(vec.empty());
+    
+    // Should have destroyed all elements
+    EXPECT_EQ(TestObject::destructor_calls - destructors_before, static_cast<int>(num_elements));
+}
+
+// Test edge case: resize shrink with partial pages
+TEST_F(PageByPageOptimizationTest, ResizeShrinkPartialPages)
+{
+    constexpr size_t PAGE_SIZE = 7;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Fill with non-aligned sizes
+    const size_t initial_size = PAGE_SIZE * 2 + 4;
+    for (size_t i = 0; i < initial_size; ++i)
+    {
+        vec.emplace_back(static_cast<int>(i * 9));
+    }
+    
+    int destructors_before = TestObject::destructor_calls;
+    
+    // Resize to middle of first page
+    const size_t new_size = 3;
+    vec.resize(new_size);
+    
+    EXPECT_EQ(vec.size(), new_size);
+    
+    // Should have destroyed many elements
+    size_t destroyed = initial_size - new_size;
+    EXPECT_EQ(TestObject::destructor_calls - destructors_before, static_cast<int>(destroyed));
+    
+    // Verify remaining elements
+    for (size_t i = 0; i < new_size; ++i)
+    {
+        EXPECT_EQ(vec[i].value, static_cast<int>(i * 9));
+    }
+}
+
+// Test copy assignment with existing content (should clear first)
+TEST_F(PageByPageOptimizationTest, CopyAssignmentWithExistingContent)
+{
+    constexpr size_t PAGE_SIZE = 5;
+    
+    // Create source vector
+    chunked_vector<TestObject, PAGE_SIZE> source;
+    for (size_t i = 0; i < PAGE_SIZE * 2; ++i)
+    {
+        source.emplace_back(static_cast<int>(i * 10));
+    }
+    
+    // Create destination with different content
+    chunked_vector<TestObject, PAGE_SIZE> dest;
+    for (size_t i = 0; i < PAGE_SIZE * 3; ++i)
+    {
+        dest.emplace_back(static_cast<int>(i * 100));
+    }
+    
+    EXPECT_EQ(dest.size(), PAGE_SIZE * 3);
+    
+    // Assignment should clear existing content and copy new content
+    dest = source;
+    
+    EXPECT_EQ(dest.size(), source.size());
+    
+    // Verify all elements match source
+    for (size_t i = 0; i < source.size(); ++i)
+    {
+        EXPECT_EQ(dest[i].value, source[i].value);
+        EXPECT_EQ(dest[i].value, static_cast<int>(i * 10));
+    }
+}
+
+// Test bulk_copy_from with exact page boundaries
+TEST_F(PageByPageOptimizationTest, BulkCopyExactPageBoundaries)
+{
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<int, PAGE_SIZE> source;
+    
+    // Fill exactly 5 pages
+    const size_t num_elements = PAGE_SIZE * 5;
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        source.push_back(static_cast<int>(i * 3));
+    }
+    
+    chunked_vector<int, PAGE_SIZE> dest;
+    dest = source;
+    
+    EXPECT_EQ(dest.size(), num_elements);
+    
+    // Verify all elements
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        EXPECT_EQ(dest[i], static_cast<int>(i * 3));
+    }
+}
+
+// Test erase with trivial types (should not call destructors but still optimize)
+TEST_F(PageByPageOptimizationTest, EraseTrivialTypesMultiplePages)
+{
+    constexpr size_t PAGE_SIZE = 6;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Fill multiple pages
+    const size_t num_elements = PAGE_SIZE * 4;
+    for (size_t i = 0; i < num_elements; ++i)
+    {
+        vec.push_back(static_cast<int>(i));
+    }
+    
+    // Erase range in middle
+    auto first = vec.begin();
+    auto last = vec.begin();
+    std::advance(first, PAGE_SIZE + 2);
+    std::advance(last, PAGE_SIZE * 3 - 1);
+    
+    vec.erase(first, last);
+    
+    size_t expected_size = num_elements - (PAGE_SIZE * 2 - 3);
+    EXPECT_EQ(vec.size(), expected_size);
+    
+    // Verify elements are correct (no destructor tracking for trivial types)
+    for (size_t i = 0; i < PAGE_SIZE + 2; ++i)
+    {
+        EXPECT_EQ(vec[i], static_cast<int>(i));
+    }
+}
+
+// Test geometric growth calculation coverage
+TEST_F(PageByPageOptimizationTest, GeometricGrowthCalculation)
+{
+    constexpr size_t PAGE_SIZE = 8;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Start with small capacity
+    vec.reserve(PAGE_SIZE * 2);
+    
+    // Add elements to trigger multiple growth cycles
+    for (size_t i = 0; i < PAGE_SIZE * 16; ++i)
+    {
+        vec.push_back(static_cast<int>(i));
+    }
+    
+    EXPECT_EQ(vec.size(), PAGE_SIZE * 16);
+    
+    // Verify all elements
+    for (size_t i = 0; i < PAGE_SIZE * 16; ++i)
+    {
+        EXPECT_EQ(vec[i], static_cast<int>(i));
+    }
+}
+
+// Test max_page_capacity limits
+TEST_F(PageByPageOptimizationTest, MaxPageCapacityLimits)
+{
+    chunked_vector<int> vec;
+    
+    // Test max_size() which uses max_page_capacity()
+    size_t max_size = vec.max_size();
+    EXPECT_GT(max_size, 0);
+    
+    // The actual value depends on the system, but should be reasonable
+    EXPECT_GT(max_size, 1000000); // Should support at least a million elements
+}
+
+// Test edge case with single page operations
+TEST_F(PageByPageOptimizationTest, SinglePageOperations)
+{
+    constexpr size_t PAGE_SIZE = 10;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Fill less than one page
+    for (size_t i = 0; i < 7; ++i)
+    {
+        vec.emplace_back(static_cast<int>(i));
+    }
+    
+    int destructors_before = TestObject::destructor_calls;
+    
+    // Clear should still work with page-by-page logic for single page
+    vec.clear();
+    
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(TestObject::destructor_calls - destructors_before, 7);
+}
+
+// Test ensure_capacity_for_one_more with exact page boundary
+TEST_F(PageByPageOptimizationTest, EnsureCapacityPageBoundary)
+{
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Fill exactly to page boundary
+    for (size_t i = 0; i < PAGE_SIZE; ++i)
+    {
+        vec.push_back(static_cast<int>(i));
+    }
+    
+    EXPECT_EQ(vec.size(), PAGE_SIZE);
+    
+    // Adding one more should trigger new page allocation
+    vec.push_back(static_cast<int>(PAGE_SIZE));
+    
+    EXPECT_EQ(vec.size(), PAGE_SIZE + 1);
+    EXPECT_EQ(vec[PAGE_SIZE], static_cast<int>(PAGE_SIZE));
+}
+
+// Test allocate_page assertion coverage
+TEST_F(PageByPageOptimizationTest, AllocatePageUpdateCount)
+{
+    constexpr size_t PAGE_SIZE = 8;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Reserve capacity but don't fill
+    vec.reserve(PAGE_SIZE * 3);
+    
+    // Add elements one by one to trigger individual page allocations
+    for (size_t i = 0; i < PAGE_SIZE * 2 + 3; ++i)
+    {
+        vec.push_back(static_cast<int>(i));
+    }
+    
+    EXPECT_EQ(vec.size(), PAGE_SIZE * 2 + 3);
+    
+    // Verify all elements
+    for (size_t i = 0; i < vec.size(); ++i)
+    {
+        EXPECT_EQ(vec[i], static_cast<int>(i));
+    }
+}
+
+// ============================================================================
+// Additional Coverage Tests for Edge Cases
+// ============================================================================
+
+// Test trivial vs non-trivial type optimizations in resize
+TEST_F(PageByPageOptimizationTest, ResizeTrivialVsNonTrivialTypes)
+{
+    constexpr size_t PAGE_SIZE = 4;
+    
+    // Test with trivial types (should not call destructors)
+    chunked_vector<int, PAGE_SIZE> trivial_vec;
+    for (size_t i = 0; i < PAGE_SIZE * 3; ++i)
+    {
+        trivial_vec.push_back(static_cast<int>(i));
+    }
+    
+    // Resize smaller - should just change size for trivial types
+    trivial_vec.resize(PAGE_SIZE);
+    EXPECT_EQ(trivial_vec.size(), PAGE_SIZE);
+    
+    // Test with non-trivial types (should call destructors)
+    chunked_vector<TestObject, PAGE_SIZE> nontrivial_vec;
+    for (size_t i = 0; i < PAGE_SIZE * 3; ++i)
+    {
+        nontrivial_vec.emplace_back(static_cast<int>(i));
+    }
+    
+    int destructors_before = TestObject::destructor_calls;
+    nontrivial_vec.resize(PAGE_SIZE);
+    EXPECT_EQ(nontrivial_vec.size(), PAGE_SIZE);
+    
+    // Should have called destructors for non-trivial types
+    EXPECT_GT(TestObject::destructor_calls - destructors_before, 0);
+}
+
+// Test bulk construction optimizations
+TEST_F(PageByPageOptimizationTest, BulkConstructionOptimizations)
+{
+    constexpr size_t PAGE_SIZE = 6;
+    
+    // Test bulk_construct_default with trivial arithmetic types
+    chunked_vector<int, PAGE_SIZE> int_vec;
+    int_vec.resize(PAGE_SIZE * 2 + 3); // Should use memset optimization
+    
+    EXPECT_EQ(int_vec.size(), PAGE_SIZE * 2 + 3);
+    for (size_t i = 0; i < int_vec.size(); ++i)
+    {
+        EXPECT_EQ(int_vec[i], 0); // Should be zero-initialized
+    }
+    
+    // Test bulk_construct_default with trivial pointer types
+    chunked_vector<void*, PAGE_SIZE> ptr_vec;
+    ptr_vec.resize(PAGE_SIZE + 2); // Should use memset optimization
+    
+    EXPECT_EQ(ptr_vec.size(), PAGE_SIZE + 2);
+    for (size_t i = 0; i < ptr_vec.size(); ++i)
+    {
+        EXPECT_EQ(ptr_vec[i], nullptr); // Should be zero-initialized
+    }
+    
+    // Test bulk_construct_with_value with trivial types
+    chunked_vector<double, PAGE_SIZE> double_vec;
+    double_vec.resize(PAGE_SIZE * 2, 3.14); // Should use assignment optimization
+    
+    EXPECT_EQ(double_vec.size(), PAGE_SIZE * 2);
+    for (size_t i = 0; i < double_vec.size(); ++i)
+    {
+        EXPECT_DOUBLE_EQ(double_vec[i], 3.14);
+    }
+}
+
+// Test edge cases with empty containers
+TEST_F(PageByPageOptimizationTest, EmptyContainerEdgeCases)
+{
+    chunked_vector<TestObject> vec;
+    
+    // Clear empty container
+    vec.clear();
+    EXPECT_TRUE(vec.empty());
+    
+    // Resize empty container to zero
+    vec.resize(0);
+    EXPECT_TRUE(vec.empty());
+    
+    // Copy assignment from empty to empty
+    chunked_vector<TestObject> vec2;
+    vec2 = vec;
+    EXPECT_TRUE(vec2.empty());
+    
+    // Test copy assignment from empty to non-empty
+    vec2.emplace_back(42);
+    EXPECT_FALSE(vec2.empty());
+    
+    vec2 = vec; // Assign empty to non-empty
+    EXPECT_TRUE(vec2.empty());
+}
+
+// Test iterator edge cases and caching
+TEST_F(PageByPageOptimizationTest, IteratorEdgeCases)
+{
+    constexpr size_t PAGE_SIZE = 3;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Test iterator on empty container
+    EXPECT_EQ(vec.begin(), vec.end());
+    
+    // Add elements to span multiple pages
+    for (int i = 0; i < PAGE_SIZE * 2 + 1; ++i)
+    {
+        vec.push_back(i * 10);
+    }
+    
+    // Test iterator increment across page boundaries
+    auto it = vec.begin();
+    for (int i = 0; i < PAGE_SIZE * 2 + 1; ++i)
+    {
+        EXPECT_EQ(*it, i * 10);
+        if (i < PAGE_SIZE * 2)
+        {
+            ++it;
+        }
+    }
+    
+    // Test post-increment
+    it = vec.begin();
+    auto old_it = it++;
+    EXPECT_EQ(*old_it, 0);
+    EXPECT_EQ(*it, 10);
+    
+    // Test const iterator conversion
+    const auto& const_vec = vec;
+    auto const_it = const_vec.begin();
+    chunked_vector<int, PAGE_SIZE>::const_iterator const_it2 = vec.begin(); // Non-const to const
+    EXPECT_EQ(const_it, const_it2);
+}
+
+// Test power-of-2 vs non-power-of-2 page sizes
+TEST_F(PageByPageOptimizationTest, PageSizeOptimizations)
+{
+    // Test power-of-2 page size (should use bit operations)
+    chunked_vector<int, 8> power_of_2_vec; // 8 is power of 2
+    for (size_t i = 0; i < 20; ++i)
+    {
+        power_of_2_vec.push_back(static_cast<int>(i));
+    }
+    
+    EXPECT_EQ(power_of_2_vec.size(), 20);
+    for (size_t i = 0; i < 20; ++i)
+    {
+        EXPECT_EQ(power_of_2_vec[i], static_cast<int>(i));
+    }
+    
+    // Test non-power-of-2 page size (should use division/modulo)
+    chunked_vector<int, 7> non_power_of_2_vec; // 7 is not power of 2
+    for (size_t i = 0; i < 20; ++i)
+    {
+        non_power_of_2_vec.push_back(static_cast<int>(i * 2));
+    }
+    
+    EXPECT_EQ(non_power_of_2_vec.size(), 20);
+    for (size_t i = 0; i < 20; ++i)
+    {
+        EXPECT_EQ(non_power_of_2_vec[i], static_cast<int>(i * 2));
+    }
+}
+
+// Test pop_back with trivial vs non-trivial types
+TEST_F(PageByPageOptimizationTest, PopBackOptimizations)
+{
+    constexpr size_t PAGE_SIZE = 4;
+    
+    // Test pop_back with trivial types (should not call destructor)
+    chunked_vector<int, PAGE_SIZE> trivial_vec;
+    for (int i = 0; i < 10; ++i)
+    {
+        trivial_vec.push_back(i);
+    }
+    
+    trivial_vec.pop_back();
+    EXPECT_EQ(trivial_vec.size(), 9);
+    EXPECT_EQ(trivial_vec.back(), 8);
+    
+    // Test pop_back with non-trivial types (should call destructor)
+    chunked_vector<TestObject, PAGE_SIZE> nontrivial_vec;
+    for (int i = 0; i < 10; ++i)
+    {
+        nontrivial_vec.emplace_back(i);
+    }
+    
+    int destructors_before = TestObject::destructor_calls;
+    nontrivial_vec.pop_back();
+    EXPECT_EQ(nontrivial_vec.size(), 9);
+    
+    // Should have called destructor for non-trivial type
+    EXPECT_GT(TestObject::destructor_calls - destructors_before, 0);
+}
+
+// Test deallocate_page_array coverage
+TEST_F(PageByPageOptimizationTest, DeallocatePageArrayCoverage)
+{
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Allocate multiple pages
+    for (size_t i = 0; i < PAGE_SIZE * 3; ++i)
+    {
+        vec.push_back(static_cast<int>(i));
+    }
+    
+    EXPECT_GT(vec.capacity(), 0);
+    
+    // Move assignment should deallocate the old page array
+    chunked_vector<int, PAGE_SIZE> vec2;
+    vec2.push_back(999);
+    
+    vec2 = std::move(vec);
+    
+    // Original vector should be empty, moved-to vector should have the data
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec2.size(), PAGE_SIZE * 3);
+    
+    // Destructor will also call deallocate_page_array
+}
+
+// Test shrink_to_fit with various scenarios
+TEST_F(PageByPageOptimizationTest, ShrinkToFitScenarios)
+{
+    constexpr size_t PAGE_SIZE = 8;
+    
+    // Test shrink_to_fit with empty vector
+    chunked_vector<int, PAGE_SIZE> empty_vec;
+    empty_vec.shrink_to_fit();
+    EXPECT_EQ(empty_vec.capacity(), 0);
+    
+    // Test shrink_to_fit with exactly full pages
+    chunked_vector<int, PAGE_SIZE> full_pages_vec;
+    for (size_t i = 0; i < PAGE_SIZE * 2; ++i)
+    {
+        full_pages_vec.push_back(static_cast<int>(i));
+    }
+    
+    // Reserve extra capacity
+    full_pages_vec.reserve(PAGE_SIZE * 5);
+    size_t capacity_before = full_pages_vec.capacity();
+    
+    full_pages_vec.shrink_to_fit();
+    
+    EXPECT_LE(full_pages_vec.capacity(), capacity_before);
+    EXPECT_GE(full_pages_vec.capacity(), full_pages_vec.size());
+    
+    // Verify elements are intact
+    for (size_t i = 0; i < PAGE_SIZE * 2; ++i)
+    {
+        EXPECT_EQ(full_pages_vec[i], static_cast<int>(i));
+    }
+}
+
+// Test emplace_back return value and reference
+TEST_F(PageByPageOptimizationTest, EmplaceBackReturnValue)
+{
+    chunked_vector<TestObject> vec;
+    
+    // Test that emplace_back returns a reference to the constructed object
+    auto& ref = vec.emplace_back(42);
+    EXPECT_EQ(ref.value, 42);
+    EXPECT_EQ(&ref, &vec.back()); // Should be same object
+    
+    // Modify through returned reference
+    ref.value = 100;
+    EXPECT_EQ(vec.back().value, 100);
+}
+
+// Test calculate_page_growth with edge cases
+TEST_F(PageByPageOptimizationTest, CalculatePageGrowthEdgeCases)
+{
+    constexpr size_t PAGE_SIZE = 16;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    // Start with zero capacity (should start with exactly what's needed)
+    EXPECT_EQ(vec.capacity(), 0);
+    
+    // Reserve 1 page - should get exactly 1 page for initial allocation
+    vec.reserve(PAGE_SIZE);
+    EXPECT_GE(vec.capacity(), PAGE_SIZE);
+    
+    // Add elements to trigger geometric growth
+    size_t initial_capacity = vec.capacity();
+    
+    // Fill current capacity
+    for (size_t i = 0; i < initial_capacity; ++i)
+    {
+        vec.push_back(static_cast<int>(i));
+    }
+    
+    // Add one more to trigger growth
+    vec.push_back(static_cast<int>(initial_capacity));
+    
+    // Should have grown geometrically
+    EXPECT_GT(vec.capacity(), initial_capacity);
+}
+
+// Test the safe_alignment_of template
+TEST_F(PageByPageOptimizationTest, SafeAlignmentTest)
+{
+    // Test that safe_alignment_of works correctly
+    // This is mostly a compile-time test, but we can verify basic functionality
+    
+    chunked_vector<char> char_vec;     // Small alignment
+    chunked_vector<double> double_vec; // Larger alignment
+    chunked_vector<int*> ptr_vec;      // Pointer alignment
+    
+    // Add elements to ensure allocation works with proper alignment
+    char_vec.push_back('a');
+    double_vec.push_back(3.14);
+    ptr_vec.push_back(nullptr);
+    
+    EXPECT_EQ(char_vec.size(), 1);
+    EXPECT_EQ(double_vec.size(), 1);
+    EXPECT_EQ(ptr_vec.size(), 1);
+    
+    EXPECT_EQ(char_vec[0], 'a');
+    EXPECT_DOUBLE_EQ(double_vec[0], 3.14);
+    EXPECT_EQ(ptr_vec[0], nullptr);
+}
+
+// Test count_trailing_zeros function
+TEST_F(PageByPageOptimizationTest, CountTrailingZerosTest)
+{
+    // Test with power-of-2 page sizes to ensure bit operations work
+    chunked_vector<int, 1> vec1;     // 2^0
+    chunked_vector<int, 2> vec2;     // 2^1  
+    chunked_vector<int, 4> vec4;     // 2^2
+    chunked_vector<int, 8> vec8;     // 2^3
+    chunked_vector<int, 16> vec16;   // 2^4
+    chunked_vector<int, 32> vec32;   // 2^5
+    
+    // Add elements across page boundaries to test index calculations
+    for (int i = 0; i < 10; ++i)
+    {
+        vec1.push_back(i);
+        vec2.push_back(i);
+        vec4.push_back(i);
+        vec8.push_back(i);
+        vec16.push_back(i);
+        vec32.push_back(i);
+    }
+    
+    // Verify all work correctly
+    EXPECT_EQ(vec1.size(), 10);
+    EXPECT_EQ(vec2.size(), 10);
+    EXPECT_EQ(vec4.size(), 10);
+    EXPECT_EQ(vec8.size(), 10);
+    EXPECT_EQ(vec16.size(), 10);
+    EXPECT_EQ(vec32.size(), 10);
+    
+    // Verify element access across pages
+    for (int i = 0; i < 10; ++i)
+    {
+        EXPECT_EQ(vec1[i], i);
+        EXPECT_EQ(vec2[i], i);
+        EXPECT_EQ(vec4[i], i);
+        EXPECT_EQ(vec8[i], i);
+        EXPECT_EQ(vec16[i], i);
+        EXPECT_EQ(vec32[i], i);
+    }
+}
+
+// Test bulk operations with empty ranges
+TEST_F(PageByPageOptimizationTest, BulkOperationsEmptyRanges)
+{
+    constexpr size_t PAGE_SIZE = 4;
+    chunked_vector<TestObject, PAGE_SIZE> vec;
+    
+    // Test bulk_construct_default with empty range
+    vec.resize(5);
+    size_t old_size = vec.size();
+    vec.resize(5); // Same size - should not construct anything
+    EXPECT_EQ(vec.size(), old_size);
+    
+    // Test bulk_construct_with_value with empty range  
+    vec.resize(5, TestObject(999)); // Same size - should not construct anything
+    EXPECT_EQ(vec.size(), old_size);
+}
+
+// Test various iterator comparison scenarios
+TEST_F(PageByPageOptimizationTest, IteratorComparisonScenarios)
+{
+    constexpr size_t PAGE_SIZE = 3;
+    chunked_vector<int, PAGE_SIZE> vec;
+    
+    for (int i = 0; i < PAGE_SIZE * 2; ++i)
+    {
+        vec.push_back(i);
+    }
+    
+    auto it1 = vec.begin();
+    auto it2 = vec.begin();
+    auto it3 = vec.end();
+    
+    // Test various comparison combinations
+    EXPECT_TRUE(it1 == it2);
+    EXPECT_FALSE(it1 != it2);
+    EXPECT_TRUE(it1 != it3);
+    EXPECT_FALSE(it1 == it3);
+    
+    // Test after increment
+    ++it2;
+    EXPECT_FALSE(it1 == it2);
+    EXPECT_TRUE(it1 != it2);
+    
+    // Test iterator copy constructor
+    auto it4(it1);
+    EXPECT_TRUE(it1 == it4);
+    EXPECT_FALSE(it1 != it4);
+}
