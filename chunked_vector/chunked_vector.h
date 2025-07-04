@@ -40,6 +40,29 @@
 #define CHUNKED_VEC_ASSERT(expression) assert(expression)
 #endif
 
+// Iterator debugging support similar to Microsoft STL
+// Users can override CHUNKED_VEC_ITERATOR_DEBUG_LEVEL to control iterator debugging
+#if !defined(CHUNKED_VEC_ITERATOR_DEBUG_LEVEL)
+    #if defined(_ITERATOR_DEBUG_LEVEL)
+        #define CHUNKED_VEC_ITERATOR_DEBUG_LEVEL _ITERATOR_DEBUG_LEVEL
+    #else
+        #define CHUNKED_VEC_ITERATOR_DEBUG_LEVEL 0
+    #endif
+#endif
+
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+    #define CHUNKED_VEC_VERIFY_ITERATOR(iter) (iter)._verify_valid(__FILE__, __LINE__)
+    #define CHUNKED_VEC_VERIFY_ITERATOR_RANGE(first, last) do { \
+        CHUNKED_VEC_VERIFY_ITERATOR(first); \
+        CHUNKED_VEC_VERIFY_ITERATOR(last); \
+        CHUNKED_VEC_ASSERT((first).m_container == (last).m_container && "Iterators from different containers"); \
+        CHUNKED_VEC_ASSERT((first).m_index <= (last).m_index && "Invalid iterator range"); \
+    } while(0)
+#else
+    #define CHUNKED_VEC_VERIFY_ITERATOR(iter) ((void)0)
+    #define CHUNKED_VEC_VERIFY_ITERATOR_RANGE(first, last) ((void)0)
+#endif
+
 
 namespace dod
 {
@@ -94,6 +117,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_count(0)
         , m_page_capacity(0)
         , m_size(0)
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        , m_generation(0)
+#endif
     {
     }
 
@@ -102,6 +128,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_count(0)
         , m_page_capacity(0)
         , m_size(0)
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        , m_generation(0)
+#endif
     {
         resize(count);
     }
@@ -111,6 +140,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_count(0)
         , m_page_capacity(0)
         , m_size(0)
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        , m_generation(0)
+#endif
     {
         resize(count, value);
     }
@@ -120,6 +152,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_count(0)
         , m_page_capacity(0)
         , m_size(0)
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        , m_generation(0)
+#endif
     {
         reserve(init.size());
         for (const auto& item : init)
@@ -133,6 +168,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_count(0)
         , m_page_capacity(0)
         , m_size(0)
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        , m_generation(0)
+#endif
     {
         *this = other;
     }
@@ -142,17 +180,26 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_count(other.m_page_count)
         , m_page_capacity(other.m_page_capacity)
         , m_size(other.m_size)
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        , m_generation(other.m_generation)
+#endif
     {
         other.m_pages = nullptr;
         other.m_page_count = 0;
         other.m_page_capacity = 0;
         other.m_size = 0;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        other._invalidate_all_iterators();
+#endif
     }
 
     ~chunked_vector()
     {
         clear();
         deallocate_page_array();
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        _invalidate_all_iterators();
+#endif
     }
 
     chunked_vector& operator=(const chunked_vector& other)
@@ -160,6 +207,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         if (this != &other)
         {
             clear();
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            _invalidate_all_iterators();
+#endif
             reserve(other.m_size);
             
             if constexpr (std::is_trivially_copyable_v<T>)
@@ -194,16 +244,25 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         {
             clear();
             deallocate_page_array();
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            _invalidate_all_iterators();
+#endif
 
             m_pages = other.m_pages;
             m_page_count = other.m_page_count;
             m_page_capacity = other.m_page_capacity;
             m_size = other.m_size;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            m_generation = other.m_generation;
+#endif
 
             other.m_pages = nullptr;
             other.m_page_count = 0;
             other.m_page_capacity = 0;
             other.m_size = 0;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            other._invalidate_all_iterators();
+#endif
         }
         return *this;
     }
@@ -211,6 +270,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     chunked_vector& operator=(std::initializer_list<T> init)
     {
         clear();
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        _invalidate_all_iterators();
+#endif
         reserve(init.size());
         for (const auto& item : init)
         {
@@ -343,6 +405,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         }
         // For trivial types, just reset the size
         m_size = 0;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        _invalidate_all_iterators();
+#endif
     }
 
     CHUNKED_VEC_INLINE void push_back(const T& value)
@@ -378,6 +443,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             dod::destruct(&m_pages[page_idx][elem_idx]);
         }
         // For trivial types, no destructor call needed
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        _invalidate_iterators_at_or_after(m_size);
+#endif
     }
 
     void resize(size_type count)
@@ -416,6 +484,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             bulk_construct_default(m_size, count);
         }
         m_size = count;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        _invalidate_iterators_at_or_after(std::min(m_size, count));
+#endif
     }
 
     void resize(size_type count, const T& value)
@@ -454,10 +525,14 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             bulk_construct_with_value(m_size, count, value);
         }
         m_size = count;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        _invalidate_iterators_at_or_after(std::min(m_size, count));
+#endif
     }
 
     iterator erase(const_iterator pos)
     {
+        CHUNKED_VEC_VERIFY_ITERATOR(pos);
         CHUNKED_VEC_ASSERT(pos.m_container == this && "Iterator from different container");
         CHUNKED_VEC_ASSERT(pos.m_index < m_size && "Iterator out of range");
         
@@ -499,13 +574,15 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         }
         
         --m_size;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        _invalidate_iterators_at_or_after(erase_idx);
+#endif
         return iterator(this, erase_idx);
     }
 
     iterator erase(const_iterator first, const_iterator last)
     {
-        CHUNKED_VEC_ASSERT(first.m_container == this && last.m_container == this && "Iterators from different container");
-        CHUNKED_VEC_ASSERT(first.m_index <= last.m_index && "Invalid iterator range");
+        CHUNKED_VEC_VERIFY_ITERATOR_RANGE(first, last);
         CHUNKED_VEC_ASSERT(last.m_index <= m_size && "Iterator out of range");
         
         if (first == last)
@@ -570,11 +647,15 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         }
         
         m_size -= erase_count;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        _invalidate_iterators_at_or_after(first_idx);
+#endif
         return iterator(this, first_idx);
     }
 
     iterator erase_unsorted(const_iterator pos)
     {
+        CHUNKED_VEC_VERIFY_ITERATOR(pos);
         CHUNKED_VEC_ASSERT(pos.m_container == this && "Iterator from different container");
         CHUNKED_VEC_ASSERT(pos.m_index < m_size && "Iterator out of range");
         
@@ -603,6 +684,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         dod::destruct(&m_pages[last_page][last_elem]);
         
         --m_size;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        _invalidate_iterators_at_or_after(erase_idx);
+#endif
         return iterator(this, erase_idx);
     }
 
@@ -611,6 +695,29 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     size_type m_page_count;
     size_type m_page_capacity;
     size_type m_size;
+    
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+    mutable size_type m_generation;
+    
+    // Iterator debugging support methods
+    void _invalidate_all_iterators() const noexcept
+    {
+        ++m_generation;
+    }
+    
+    void _invalidate_iterators_at_or_after(size_type pos) const noexcept
+    {
+        // For simplicity, we invalidate all iterators when any structural change occurs
+        // A more sophisticated implementation could track iterator positions
+        (void)pos; // Suppress unused parameter warning
+        ++m_generation;
+    }
+    
+    size_type _get_generation() const noexcept
+    {
+        return m_generation;
+    }
+#endif
 
     // Helper function to count trailing zeros (C++17 compatible)
     static constexpr size_type count_trailing_zeros(size_type value) noexcept
@@ -891,12 +998,18 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             , m_index(0)
             , m_current_page(nullptr)
             , m_page_element_index(0)
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            , m_generation(0)
+#endif
         {
         }
 
         basic_iterator(const chunked_vector* container, size_type index) noexcept
             : m_container(container)
             , m_index(index)
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            , m_generation(container ? container->_get_generation() : 0)
+#endif
         {
             update_page_cache();
         }
@@ -905,12 +1018,18 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         basic_iterator(const basic_iterator<U>& other) noexcept
             : m_container(other.m_container)
             , m_index(other.m_index)
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            , m_generation(other.m_generation)
+#endif
         {
             update_page_cache();
         }
 
         reference operator*() const
         {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            _verify_valid(__FILE__, __LINE__);
+#endif
             CHUNKED_VEC_ASSERT(m_container && m_index < m_container->size() && "Iterator out of range");
             CHUNKED_VEC_ASSERT(m_current_page && "Invalid page cache");
             return m_current_page[m_page_element_index];
@@ -918,6 +1037,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
 
         pointer operator->() const
         {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            _verify_valid(__FILE__, __LINE__);
+#endif
             CHUNKED_VEC_ASSERT(m_container && m_index < m_container->size() && "Iterator out of range");
             CHUNKED_VEC_ASSERT(m_current_page && "Invalid page cache");
             return &m_current_page[m_page_element_index];
@@ -925,6 +1047,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
 
         CHUNKED_VEC_INLINE basic_iterator& operator++()
         {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            _verify_valid(__FILE__, __LINE__);
+#endif
             ++m_index;
             ++m_page_element_index;
             
@@ -962,6 +1087,34 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         size_type m_index;
         ValueType* m_current_page;
         size_type m_page_element_index;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        size_type m_generation;
+        
+        void _verify_valid(const char* file, int line) const
+        {
+            if (!m_container)
+            {
+                CHUNKED_VEC_ASSERT(false && "Iterator is not associated with a container");
+                return;
+            }
+            
+            if (m_generation != m_container->_get_generation())
+            {
+                // Iterator has been invalidated
+                CHUNKED_VEC_ASSERT(false && "Iterator has been invalidated");
+                return;
+            }
+            
+            if (m_index > m_container->size())
+            {
+                CHUNKED_VEC_ASSERT(false && "Iterator is out of range");
+                return;
+            }
+            
+            (void)file; // Suppress unused parameter warning
+            (void)line; // Suppress unused parameter warning
+        }
+#endif
 
         CHUNKED_VEC_INLINE void update_page_cache()
         {
