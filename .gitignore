@@ -10,3 +10,8 @@ perf_results/*.csv
 build_debug0
 build_debug1
 build_debug2
+build_debug0_Release
+build_debug1_Debug
+build_debug2_Debug
+build_perf_0
+build_perf_1
