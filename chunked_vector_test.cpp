@@ -1,3 +1,4 @@
+#include "test_iterator_debug_assertions.h"
 #include "chunked_vector/chunked_vector.h"
 #include "test_common.h"
 #include <algorithm>
