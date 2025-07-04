@@ -178,9 +178,9 @@ jobs:
       - name: Configure CMake (Windows)
         if: runner.os == 'Windows'
         run: |
-          cmake -B build \
-            -G "${{ matrix.config.generator }}" \
-            -A x64 \
+          cmake -B build `
+            -G "${{ matrix.config.generator }}" `
+            -A x64 `
             -DCMAKE_CXX_FLAGS="/DCHUNKED_VEC_ITERATOR_DEBUG_LEVEL=${{ matrix.config.debug_level }}"
 
       - name: Build
