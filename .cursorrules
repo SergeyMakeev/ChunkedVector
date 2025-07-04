@@ -1,0 +1,187 @@
+# Chunked Vector Optimization Rules
+
+## Core Principle: Page-by-Page Processing
+Always prioritize page-by-page iteration over element-by-element iteration when processing multiple elements in chunked_vector.
+
+## ❌ AVOID: Redundant Index Calculations
+
+### Anti-Pattern 1: Linear element iteration with index calculations
+```cpp
+// BAD: Redundant get_page_and_element_indices() calls
+for (size_type i = 0; i < m_size; ++i) {
+    auto [page_idx, elem_idx] = get_page_and_element_indices(i);
+    // process m_pages[page_idx][elem_idx]
+}
+```
+
+### Anti-Pattern 2: Repeated division/modulo in loops
+```cpp
+// BAD: Repeated expensive calculations
+for (size_type i = start; i < end; ++i) {
+    size_type page_idx = i / PAGE_SIZE;
+    size_type elem_idx = i % PAGE_SIZE;
+    // process element
+}
+```
+
+### Anti-Pattern 3: Element-by-element access in bulk operations
+```cpp
+// BAD: Inefficient element access
+for (size_type i = 0; i < other.m_size; ++i) {
+    push_back(other[i]); // triggers get_page_and_element_indices()
+}
+```
+
+## ✅ PREFERRED: Page-by-Page Optimization Patterns
+
+### Pattern 1: Full container iteration
+```cpp
+// GOOD: Page-by-page with remaining element tracking
+size_type remaining_elements = m_size;
+for (size_type page_idx = 0; page_idx < m_page_count && remaining_elements > 0; ++page_idx) {
+    size_type elements_in_this_page = std::min(remaining_elements, PAGE_SIZE);
+    T* page = m_pages[page_idx];
+    
+    for (size_type elem_idx = 0; elem_idx < elements_in_this_page; ++elem_idx) {
+        // process page[elem_idx]
+    }
+    
+    remaining_elements -= elements_in_this_page;
+}
+```
+
+### Pattern 2: Range-based iteration with partial pages
+```cpp
+// GOOD: Handle partial pages at start and end of range
+size_type current_idx = start_idx;
+size_type elements_remaining = end_idx - start_idx;
+
+while (elements_remaining > 0) {
+    size_type page_idx = current_idx / PAGE_SIZE;
+    size_type start_elem_idx = current_idx % PAGE_SIZE;
+    size_type elements_in_page = PAGE_SIZE - start_elem_idx;
+    size_type elements_to_process = std::min(elements_remaining, elements_in_page);
+    
+    T* page = m_pages[page_idx];
+    for (size_type elem_idx = start_elem_idx; elem_idx < start_elem_idx + elements_to_process; ++elem_idx) {
+        // process page[elem_idx]
+    }
+    
+    current_idx += elements_to_process;
+    elements_remaining -= elements_to_process;
+}
+```
+
+### Pattern 3: Bulk operations with memcpy for trivial types
+```cpp
+// GOOD: Use bulk memory operations when possible
+if constexpr (std::is_trivially_copyable_v<T>) {
+    for (size_type page_idx = 0; page_idx < page_count && remaining > 0; ++page_idx) {
+        size_type elements_in_page = std::min(remaining, PAGE_SIZE);
+        std::memcpy(dst_pages[page_idx], src_pages[page_idx], elements_in_page * sizeof(T));
+        remaining -= elements_in_page;
+    }
+}
+```
+
+## Specific Rules for Chunked Vector Operations
+
+### 1. Destruction Operations
+- Always use page-by-page iteration for calling destructors
+- Only call destructors for non-trivially destructible types
+- Track remaining elements to avoid processing empty pages
+
+### 2. Construction Operations
+- Use bulk construction patterns with page segmentation
+- Prefer memset/memcpy for trivial types
+- Handle partial pages correctly at range boundaries
+
+### 3. Movement Operations (erase, etc.)
+- Batch moves within page boundaries when possible
+- Calculate source and destination page boundaries once per batch
+- Minimize the number of individual element moves
+
+### 4. Copy Operations
+- Use memcpy for trivial types
+- For non-trivial types, access source elements page-by-page
+- Avoid repeated operator[] calls in loops
+
+## Performance Considerations
+
+### Cache Locality
+- Process elements within the same page sequentially
+- Minimize page pointer dereferencing
+- Cache page pointers in local variables
+
+### Computational Efficiency
+- Calculate page/element indices only when crossing page boundaries
+- Use bit operations for power-of-2 page sizes
+- Minimize arithmetic operations in tight loops
+
+### Memory Access Patterns
+- Prefer sequential access within pages
+- Batch operations to reduce function call overhead
+- Use const-correctness to enable compiler optimizations
+
+## Code Review Checklist
+
+Before approving any chunked_vector changes, verify:
+
+- [ ] No loops with repeated get_page_and_element_indices() calls
+- [ ] No element-by-element iteration that could be page-by-page
+- [ ] Bulk operations use appropriate optimization (memcpy vs placement new)
+- [ ] Partial page handling is correct at range boundaries
+- [ ] Remaining element counting prevents overprocessing
+- [ ] Page pointers are cached in local variables within inner loops
+- [ ] Only necessary arithmetic operations in performance-critical paths
+
+## Implementation Templates
+
+### Template: Page-by-page destruction
+```cpp
+size_type remaining_elements = element_count;
+size_type current_idx = start_idx;
+
+while (remaining_elements > 0) {
+    size_type page_idx = current_idx / PAGE_SIZE;
+    size_type start_elem = current_idx % PAGE_SIZE;
+    size_type elements_in_page = PAGE_SIZE - start_elem;
+    size_type elements_to_destroy = std::min(remaining_elements, elements_in_page);
+    
+    T* page = m_pages[page_idx];
+    for (size_type elem_idx = start_elem; elem_idx < start_elem + elements_to_destroy; ++elem_idx) {
+        dod::destruct(&page[elem_idx]);
+    }
+    
+    current_idx += elements_to_destroy;
+    remaining_elements -= elements_to_destroy;
+}
+```
+
+### Template: Page-by-page construction
+```cpp
+size_type current_idx = start_idx;
+
+while (current_idx < end_idx) {
+    size_type page_idx = current_idx / PAGE_SIZE;
+    size_type start_elem = current_idx % PAGE_SIZE;
+    size_type remaining_in_range = end_idx - current_idx;
+    size_type remaining_in_page = PAGE_SIZE - start_elem;
+    size_type elements_to_construct = std::min(remaining_in_range, remaining_in_page);
+    
+    T* page = m_pages[page_idx];
+    // Construct elements_to_construct elements starting at page[start_elem]
+    
+    current_idx += elements_to_construct;
+}
+```
+
+## Exception: When Linear Iteration is Acceptable
+
+Linear iteration with index calculations is acceptable only for:
+- Single element access (operator[], at(), etc.)
+- Operations on individual elements (not bulk operations)
+- Iterator implementations where the index calculation is cached
+- Debug/assertion code that runs infrequently
+
+Remember: The goal is to minimize redundant computations while maintaining code clarity and correctness. 
