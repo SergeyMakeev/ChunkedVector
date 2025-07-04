@@ -1,8 +1,11 @@
+// Include custom assertion handler before chunked_vector header
+#include "test_iterator_debug_assertions.h"
 #include "chunked_vector/chunked_vector.h"
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <algorithm>
 #include <numeric>
+#include <memory>
 
 using namespace dod;
 
@@ -10,8 +13,28 @@ using namespace dod;
 class ChunkedVectorIteratorDebugTest : public ::testing::Test
 {
   protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override {
+        // Reset assertion state before each test
+        assertion_guard.reset(new test_assertions::AssertionStateGuard());
+    }
+    
+    void TearDown() override {
+        // Clean up assertion guard
+        assertion_guard.reset();
+    }
+    
+    // Helper to check if assertion was triggered
+    bool was_assertion_triggered() const {
+        return assertion_guard && assertion_guard->was_assertion_triggered();
+    }
+    
+    const std::string& get_last_assertion_expression() const {
+        static const std::string empty;
+        return assertion_guard ? assertion_guard->get_last_expression() : empty;
+    }
+    
+  private:
+    std::unique_ptr<test_assertions::AssertionStateGuard> assertion_guard;
 };
 
 // =============================================================================
@@ -29,6 +52,31 @@ TEST_F(ChunkedVectorIteratorDebugTest, IteratorDebugLevelCompileTimeCheck)
     EXPECT_EQ(*it, 1);
     ++it;
     EXPECT_EQ(it, vec.end());
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, CustomAssertionMechanismTest)
+{
+    // Test our custom assertion mechanism directly
+    EXPECT_FALSE(was_assertion_triggered());
+    
+    // This should NOT trigger an assertion
+    CHUNKED_VEC_ASSERT(true && "This should not trigger");
+    EXPECT_FALSE(was_assertion_triggered());
+    
+    // This SHOULD trigger an assertion and throw an exception
+    bool exception_caught = false;
+    std::string exception_message;
+    try {
+        CHUNKED_VEC_ASSERT(false && "Test assertion message");
+        FAIL() << "Expected assertion exception was not thrown";
+    } catch (const test_assertions::AssertionException& e) {
+        exception_caught = true;
+        exception_message = e.get_expression();
+        EXPECT_EQ(exception_message, "false && \"Test assertion message\"");
+    }
+    
+    EXPECT_TRUE(exception_caught) << "Custom assertion exception should have been thrown";
+    EXPECT_TRUE(was_assertion_triggered()) << "Assertion state should be triggered";
 }
 
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
@@ -493,6 +541,198 @@ TEST_F(ChunkedVectorIteratorDebugTest, EraseUnsortedIteratorBehavior)
     auto check_it = vec.begin();
     std::advance(check_it, 3);
     EXPECT_EQ(*check_it, 9);
+}
+
+// =============================================================================
+// Assertion Verification Tests (Debug Mode Only)
+// =============================================================================
+
+TEST_F(ChunkedVectorIteratorDebugTest, AssertionOnOutOfRangeAccess)
+{
+    chunked_vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    
+    // Valid access should not trigger assertion
+    auto it = vec.begin();
+    EXPECT_EQ(*it, 1);
+    EXPECT_FALSE(was_assertion_triggered());
+    
+    ++it;
+    EXPECT_EQ(*it, 2);
+    EXPECT_FALSE(was_assertion_triggered());
+    
+    // Access beyond end should trigger assertion
+    ++it; // Now points to end()
+    
+    bool assertion_caught = false;
+    std::string assertion_message;
+    try {
+        *it;  // This should trigger assertion: "Iterator out of range"
+        FAIL() << "Expected assertion exception was not thrown";
+    } catch (const test_assertions::AssertionException& e) {
+        assertion_caught = true;
+        assertion_message = e.get_expression();
+        EXPECT_TRUE(assertion_message.find("out of range") != std::string::npos ||
+                   assertion_message.find("index") != std::string::npos)
+            << "Unexpected assertion message: " << assertion_message;
+    }
+    
+    EXPECT_TRUE(assertion_caught) << "Assertion exception should have been thrown";
+    EXPECT_TRUE(was_assertion_triggered()) << "Assertion state should be triggered";
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, AssertionOnInvalidatedIteratorAccess)
+{
+    chunked_vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    
+    auto it = vec.begin();
+    EXPECT_EQ(*it, 1);
+    EXPECT_FALSE(was_assertion_triggered());
+    
+    // Clear invalidates all iterators
+    vec.clear();
+    
+    // Accessing invalidated iterator should trigger assertion
+    bool assertion_caught = false;
+    std::string assertion_message;
+    try {
+        *it;  // This should trigger assertion: "Iterator has been invalidated"
+        FAIL() << "Expected assertion exception was not thrown";
+    } catch (const test_assertions::AssertionException& e) {
+        assertion_caught = true;
+        assertion_message = e.get_expression();
+        EXPECT_TRUE(assertion_message.find("invalidated") != std::string::npos ||
+                   assertion_message.find("generation") != std::string::npos)
+            << "Unexpected assertion message: " << assertion_message;
+    }
+    
+    EXPECT_TRUE(assertion_caught) << "Assertion exception should have been thrown";
+    EXPECT_TRUE(was_assertion_triggered()) << "Assertion state should be triggered";
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, AssertionOnIteratorFromDifferentContainer)
+{
+    chunked_vector<int> vec1 = {1, 2, 3};
+    chunked_vector<int> vec2 = {4, 5, 6};
+    
+    auto it1 = vec1.begin();
+    auto it2 = vec2.begin();
+    
+    // Using iterator from different container should trigger assertion
+    bool assertion_caught = false;
+    std::string assertion_message;
+    try {
+        vec1.erase(it2);  // This should trigger assertion: "Iterator from different container"
+        FAIL() << "Expected assertion exception was not thrown";
+    } catch (const test_assertions::AssertionException& e) {
+        assertion_caught = true;
+        assertion_message = e.get_expression();
+        EXPECT_TRUE(assertion_message.find("container") != std::string::npos ||
+                   assertion_message.find("different") != std::string::npos)
+            << "Unexpected assertion message: " << assertion_message;
+    }
+    
+    EXPECT_TRUE(assertion_caught) << "Assertion exception should have been thrown";
+    EXPECT_TRUE(was_assertion_triggered()) << "Assertion state should be triggered";
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, AssertionOnInvalidIteratorRange)
+{
+    chunked_vector<int> vec = {1, 2, 3, 4, 5};
+    
+    auto first = vec.begin();
+    std::advance(first, 3);  // Position 3
+    auto last = vec.begin();
+    std::advance(last, 1);   // Position 1
+    
+    // Invalid range (first > last) should trigger assertion
+    bool assertion_caught = false;
+    std::string assertion_message;
+    try {
+        vec.erase(first, last);  // This should trigger assertion: "Invalid iterator range"
+        FAIL() << "Expected assertion exception was not thrown";
+    } catch (const test_assertions::AssertionException& e) {
+        assertion_caught = true;
+        assertion_message = e.get_expression();
+        EXPECT_TRUE(assertion_message.find("range") != std::string::npos ||
+                   assertion_message.find("index") != std::string::npos)
+            << "Unexpected assertion message: " << assertion_message;
+    }
+    
+    EXPECT_TRUE(assertion_caught) << "Assertion exception should have been thrown";
+    EXPECT_TRUE(was_assertion_triggered()) << "Assertion state should be triggered";
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, AssertionOnIteratorAfterResize)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it = vec.begin();
+    std::advance(it, 8); // Point to element 8
+    EXPECT_EQ(*it, 8);
+    EXPECT_FALSE(was_assertion_triggered());
+    
+    // Resize to smaller size, invalidating iterator
+    vec.resize(5);
+    
+    // Using iterator that's now beyond valid range should trigger assertion
+    bool assertion_caught = false;
+    std::string assertion_message;
+    try {
+        *it;  // This should trigger assertion since iterator is beyond new size
+        FAIL() << "Expected assertion exception was not thrown";
+    } catch (const test_assertions::AssertionException& e) {
+        assertion_caught = true;
+        assertion_message = e.get_expression();
+        // Iterator beyond valid range after resize
+        EXPECT_TRUE(assertion_message.find("out of range") != std::string::npos ||
+                   assertion_message.find("index") != std::string::npos ||
+                   assertion_message.find("invalidated") != std::string::npos)
+            << "Unexpected assertion message: " << assertion_message;
+    }
+    
+    EXPECT_TRUE(assertion_caught) << "Assertion exception should have been thrown";
+    EXPECT_TRUE(was_assertion_triggered()) << "Assertion state should be triggered";
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, AssertionOnIteratorAfterMoveAssignment)
+{
+    chunked_vector<int> vec1 = {1, 2, 3};
+    chunked_vector<int> vec2 = {4, 5, 6};
+    
+    auto it1 = vec1.begin();
+    auto it2 = vec2.begin();
+    
+    EXPECT_EQ(*it1, 1);
+    EXPECT_EQ(*it2, 4);
+    EXPECT_FALSE(was_assertion_triggered());
+    
+    // Move assignment invalidates iterators from both containers
+    vec2 = std::move(vec1);
+    
+    // Using invalidated iterator should trigger assertion
+    bool assertion_caught = false;
+    std::string assertion_message;
+    try {
+        *it1;  // This should trigger assertion since iterator was invalidated
+        FAIL() << "Expected assertion exception was not thrown";
+    } catch (const test_assertions::AssertionException& e) {
+        assertion_caught = true;
+        assertion_message = e.get_expression();
+        EXPECT_TRUE(assertion_message.find("invalidated") != std::string::npos ||
+                   assertion_message.find("generation") != std::string::npos ||
+                   assertion_message.find("out of range") != std::string::npos)
+            << "Unexpected assertion message: " << assertion_message;
+    }
+    
+    EXPECT_TRUE(assertion_caught) << "Assertion exception should have been thrown";
+    EXPECT_TRUE(was_assertion_triggered()) << "Assertion state should be triggered";
 }
 
 #else // CHUNKED_VEC_ITERATOR_DEBUG_LEVEL == 0

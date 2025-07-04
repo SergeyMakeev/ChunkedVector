@@ -43,6 +43,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(chunked_vector_tests
   chunked_vector_test.cpp
   test_iterator_debug.cpp
+  test_iterator_debug_assertions.h
 )
 
 # Link Google Test and chunked_vector
