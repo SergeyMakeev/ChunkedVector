@@ -615,6 +615,435 @@ TEST_F(ChunkedVectorIteratorDebugTest, AssertionOnIteratorAfterMoveAssignment)
     EXPECT_THROW(*it1, test_assertions::AssertionException);
 }
 
+// =============================================================================
+// Partial Invalidation Tests (Microsoft STL-inspired behavior)
+// =============================================================================
+
+TEST_F(ChunkedVectorIteratorDebugTest, PartialInvalidationAfterErase)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it_before = vec.begin();   // Position 0
+    auto it_at = vec.begin();       // Position 3 (to be erased)
+    std::advance(it_at, 3);
+    auto it_after = vec.begin();    // Position 7 (should be invalidated)
+    std::advance(it_after, 7);
+    
+    EXPECT_EQ(*it_before, 0);
+    EXPECT_EQ(*it_at, 3);
+    EXPECT_EQ(*it_after, 7);
+    
+    // Erase element at position 3
+    vec.erase(it_at);
+    
+    // it_before should still be valid (position 0 < erase position 3)
+    EXPECT_EQ(*it_before, 0);
+    
+    // it_after should be invalidated (position 7 >= erase position 3)
+    EXPECT_THROW(*it_after, test_assertions::AssertionException);
+    
+    // Verify container state
+    EXPECT_EQ(vec.size(), 9);
+    auto new_it = vec.begin();
+    std::advance(new_it, 3);
+    EXPECT_EQ(*new_it, 4); // Element that was at position 4 is now at position 3
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, PartialInvalidationAfterEraseRange)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it_before = vec.begin();   // Position 0
+    auto it_at_start = vec.begin(); // Position 2 (start of range)
+    std::advance(it_at_start, 2);
+    auto it_in_range = vec.begin(); // Position 4 (middle of range)
+    std::advance(it_in_range, 4);
+    auto it_at_end = vec.begin();   // Position 6 (end of range)
+    std::advance(it_at_end, 6);
+    auto it_after = vec.begin();    // Position 8 (after range)
+    std::advance(it_after, 8);
+    
+    EXPECT_EQ(*it_before, 0);
+    EXPECT_EQ(*it_at_start, 2);
+    EXPECT_EQ(*it_in_range, 4);
+    EXPECT_EQ(*it_at_end, 6);
+    EXPECT_EQ(*it_after, 8);
+    
+    // Erase range [2, 6) - removes elements 2, 3, 4, 5
+    vec.erase(it_at_start, it_at_end);
+    
+    // it_before should still be valid (position 0 < erase start position 2)
+    EXPECT_EQ(*it_before, 0);
+    
+    // All other iterators should be invalidated (position >= erase start position 2)
+    EXPECT_THROW(*it_in_range, test_assertions::AssertionException);
+    EXPECT_THROW(*it_at_end, test_assertions::AssertionException);
+    EXPECT_THROW(*it_after, test_assertions::AssertionException);
+    
+    // Verify container state
+    EXPECT_EQ(vec.size(), 6);
+    // Remaining elements should be: 0, 1, 6, 7, 8, 9
+    std::vector<int> expected = {0, 1, 6, 7, 8, 9};
+    auto check_it = vec.begin();
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_EQ(*check_it, expected[i]);
+        ++check_it;
+    }
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, PartialInvalidationAfterPopBack)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it_before_last = vec.begin();  // Position 7
+    std::advance(it_before_last, 7);
+    auto it_second_to_last = vec.begin(); // Position 8
+    std::advance(it_second_to_last, 8);
+    auto it_last = vec.begin();         // Position 9 (last element)
+    std::advance(it_last, 9);
+    
+    EXPECT_EQ(*it_before_last, 7);
+    EXPECT_EQ(*it_second_to_last, 8);
+    EXPECT_EQ(*it_last, 9);
+    
+    // Pop back removes last element (at position 9)
+    vec.pop_back();
+    
+    // Iterators before the removed position should still be valid
+    EXPECT_EQ(*it_before_last, 7);
+    EXPECT_EQ(*it_second_to_last, 8);
+    
+    // Iterator pointing to the removed element should be invalidated
+    EXPECT_THROW(*it_last, test_assertions::AssertionException);
+    
+    EXPECT_EQ(vec.size(), 9);
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, PartialInvalidationAfterResize)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it_valid = vec.begin();        // Position 3 (should remain valid)
+    std::advance(it_valid, 3);
+    auto it_at_boundary = vec.begin();  // Position 6 (at new size boundary)
+    std::advance(it_at_boundary, 6);
+    auto it_invalid = vec.begin();      // Position 8 (should be invalidated)
+    std::advance(it_invalid, 8);
+    
+    EXPECT_EQ(*it_valid, 3);
+    EXPECT_EQ(*it_at_boundary, 6);
+    EXPECT_EQ(*it_invalid, 8);
+    
+    // Resize to 7 elements (removes elements at positions 7, 8, 9)
+    vec.resize(7);
+    
+    // Iterators before the resize point should still be valid
+    EXPECT_EQ(*it_valid, 3);
+    EXPECT_EQ(*it_at_boundary, 6);
+    
+    // Iterator pointing to removed element should be invalidated
+    EXPECT_THROW(*it_invalid, test_assertions::AssertionException);
+    
+    EXPECT_EQ(vec.size(), 7);
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, NoInvalidationWhenNoStructuralChange)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it1 = vec.begin();
+    auto it2 = vec.begin();
+    std::advance(it2, 5);
+    auto it3 = vec.begin();
+    std::advance(it3, 9);
+    
+    EXPECT_EQ(*it1, 0);
+    EXPECT_EQ(*it2, 5);
+    EXPECT_EQ(*it3, 9);
+    
+    // Operations that don't change structure shouldn't invalidate iterators
+    vec[0] = 100;
+    vec[5] = 200;
+    
+    // All iterators should still be valid
+    EXPECT_EQ(*it1, 100);
+    EXPECT_EQ(*it2, 200);
+    EXPECT_EQ(*it3, 9);
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, IteratorAdoptionOnConstruction)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i);
+    }
+    
+    // Create multiple iterators - they should all be adopted
+    auto it1 = vec.begin();
+    auto it2 = vec.begin();
+    ++it2;
+    auto it3 = vec.end();
+    
+    EXPECT_EQ(*it1, 0);
+    EXPECT_EQ(*it2, 1);
+    EXPECT_EQ(it3, vec.end());
+    
+    // All iterators should be valid initially
+    EXPECT_NO_THROW(*it1);
+    EXPECT_NO_THROW(*it2);
+    
+    // Clear should invalidate all adopted iterators
+    vec.clear();
+    
+    EXPECT_THROW(*it1, test_assertions::AssertionException);
+    EXPECT_THROW(*it2, test_assertions::AssertionException);
+    // end() iterator access is tested differently as it's not dereferenced
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, IteratorOrphaningOnDestruction)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i);
+    }
+    
+    {
+        // Create iterator in limited scope
+        auto it = vec.begin();
+        EXPECT_EQ(*it, 0);
+        // Iterator should be automatically orphaned when it goes out of scope
+    }
+    
+    // Container should still be valid and not crash
+    auto new_it = vec.begin();
+    EXPECT_EQ(*new_it, 0);
+    
+    // Clear should not crash even though previous iterator was orphaned
+    vec.clear();
+    EXPECT_TRUE(vec.empty());
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, IteratorAssignmentAdoption)
+{
+    chunked_vector<int> vec1;
+    chunked_vector<int> vec2;
+    
+    for (int i = 0; i < 5; ++i) {
+        vec1.push_back(i);
+        vec2.push_back(i + 10);
+    }
+    
+    auto it1 = vec1.begin();
+    auto it2 = vec2.begin();
+    
+    EXPECT_EQ(*it1, 0);
+    EXPECT_EQ(*it2, 10);
+    
+    // Assignment should orphan from old container and adopt to new one
+    it1 = it2;
+    EXPECT_EQ(*it1, 10);
+    
+    // Clear vec1 should not affect it1 (now points to vec2)
+    vec1.clear();
+    EXPECT_EQ(*it1, 10);
+    
+    // Clear vec2 should invalidate it1 (now points to vec2)
+    vec2.clear();
+    EXPECT_THROW(*it1, test_assertions::AssertionException);
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, PartialInvalidationEdgeCases)
+{
+    chunked_vector<int> vec;
+    vec.push_back(0);
+    
+    auto it = vec.begin();
+    EXPECT_EQ(*it, 0);
+    
+    // Erase the only element (position 0)
+    vec.erase(it);
+    
+    // Iterator should be invalidated
+    EXPECT_THROW(*it, test_assertions::AssertionException);
+    EXPECT_TRUE(vec.empty());
+    
+    // Add elements back
+    vec.push_back(1);
+    vec.push_back(2);
+    
+    auto it0 = vec.begin();
+    auto it1 = vec.begin();
+    ++it1;
+    
+    EXPECT_EQ(*it0, 1);
+    EXPECT_EQ(*it1, 2);
+    
+    // Erase first element (position 0)
+    vec.erase(it0);
+    
+    // it0 should be invalidated (position 0 >= erase position 0)
+    EXPECT_THROW(*it0, test_assertions::AssertionException);
+    
+    // it1 should be invalidated (position 1 >= erase position 0)
+    EXPECT_THROW(*it1, test_assertions::AssertionException);
+    
+    EXPECT_EQ(vec.size(), 1);
+    auto new_it = vec.begin();
+    EXPECT_EQ(*new_it, 2);
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, MultiplePartialInvalidations)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 10; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it0 = vec.begin();         // Position 0
+    auto it2 = vec.begin();         // Position 2
+    std::advance(it2, 2);
+    auto it5 = vec.begin();         // Position 5
+    std::advance(it5, 5);
+    auto it8 = vec.begin();         // Position 8
+    std::advance(it8, 8);
+    
+    EXPECT_EQ(*it0, 0);
+    EXPECT_EQ(*it2, 2);
+    EXPECT_EQ(*it5, 5);
+    EXPECT_EQ(*it8, 8);
+    
+    // First erase at position 6
+    auto erase_it = vec.begin();
+    std::advance(erase_it, 6);
+    vec.erase(erase_it);
+    
+    // it0, it2, it5 should still be valid (positions 0, 2, 5 < erase position 6)
+    EXPECT_EQ(*it0, 0);
+    EXPECT_EQ(*it2, 2);
+    EXPECT_EQ(*it5, 5);
+    
+    // it8 should be invalidated (position 8 >= erase position 6)
+    EXPECT_THROW(*it8, test_assertions::AssertionException);
+    
+    // Second erase at position 3
+    auto erase_it2 = vec.begin();
+    std::advance(erase_it2, 3);
+    vec.erase(erase_it2);
+    
+    // it0, it2 should still be valid (positions 0, 2 < erase position 3)
+    EXPECT_EQ(*it0, 0);
+    EXPECT_EQ(*it2, 2);
+    
+    // it5 should be invalidated (position 5 >= erase position 3)
+    EXPECT_THROW(*it5, test_assertions::AssertionException);
+    
+    EXPECT_EQ(vec.size(), 8);
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, PartialInvalidationWithEndIterator)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 5; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto begin_it = vec.begin();
+    auto end_it = vec.end();
+    auto mid_it = vec.begin();
+    std::advance(mid_it, 3);
+    
+    EXPECT_EQ(*begin_it, 0);
+    EXPECT_EQ(*mid_it, 3);
+    EXPECT_EQ(end_it, vec.end());
+    
+    // Erase element at position 2
+    auto erase_it = vec.begin();
+    std::advance(erase_it, 2);
+    vec.erase(erase_it);
+    
+    // begin_it should still be valid (position 0 < erase position 2)
+    EXPECT_EQ(*begin_it, 0);
+    
+    // mid_it should be invalidated (position 3 >= erase position 2)
+    EXPECT_THROW(*mid_it, test_assertions::AssertionException);
+    
+    // end_it should be invalidated (end position >= erase position 2)
+    // Note: We can't dereference end_it, but we can check if it equals new end
+    auto new_end = vec.end();
+    // The old end_it should be invalidated, but comparison might still work in some implementations
+    
+    EXPECT_EQ(vec.size(), 4);
+}
+
+// =============================================================================
+// Iterator Adoption Mechanism Tests
+// =============================================================================
+
+TEST_F(ChunkedVectorIteratorDebugTest, IteratorCopyConstructorAdoption)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 3; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it1 = vec.begin();
+    ++it1;
+    EXPECT_EQ(*it1, 1);
+    
+    // Copy constructor should adopt the new iterator
+    auto it2 = it1;
+    EXPECT_EQ(*it2, 1);
+    
+    // Both iterators should be valid
+    EXPECT_EQ(*it1, 1);
+    EXPECT_EQ(*it2, 1);
+    
+    // Clear should invalidate both
+    vec.clear();
+    EXPECT_THROW(*it1, test_assertions::AssertionException);
+    EXPECT_THROW(*it2, test_assertions::AssertionException);
+}
+
+TEST_F(ChunkedVectorIteratorDebugTest, ConstIteratorConversionAdoption)
+{
+    chunked_vector<int> vec;
+    for (int i = 0; i < 3; ++i) {
+        vec.push_back(i);
+    }
+    
+    auto it = vec.begin();
+    ++it;
+    EXPECT_EQ(*it, 1);
+    
+    // Conversion to const iterator should adopt the new iterator
+    chunked_vector<int>::const_iterator const_it = it;
+    EXPECT_EQ(*const_it, 1);
+    
+    // Both iterators should be valid
+    EXPECT_EQ(*it, 1);
+    EXPECT_EQ(*const_it, 1);
+    
+    // Clear should invalidate both
+    vec.clear();
+    EXPECT_THROW(*it, test_assertions::AssertionException);
+    EXPECT_THROW(*const_it, test_assertions::AssertionException);
+}
+
 #else // CHUNKED_VEC_ITERATOR_DEBUG_LEVEL == 0
 
 // =============================================================================

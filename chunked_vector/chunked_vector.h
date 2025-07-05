@@ -126,7 +126,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_capacity(0)
         , m_size(0)
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-        , m_generation(0)
+        , m_iterator_list(nullptr)
 #endif
     {
     }
@@ -137,7 +137,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_capacity(0)
         , m_size(0)
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-        , m_generation(0)
+        , m_iterator_list(nullptr)
 #endif
     {
         resize(count);
@@ -149,7 +149,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_capacity(0)
         , m_size(0)
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-        , m_generation(0)
+        , m_iterator_list(nullptr)
 #endif
     {
         resize(count, value);
@@ -161,7 +161,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_capacity(0)
         , m_size(0)
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-        , m_generation(0)
+        , m_iterator_list(nullptr)
 #endif
     {
         reserve(init.size());
@@ -177,7 +177,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_capacity(0)
         , m_size(0)
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-        , m_generation(0)
+        , m_iterator_list(nullptr)
 #endif
     {
         *this = other;
@@ -189,7 +189,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_capacity(other.m_page_capacity)
         , m_size(other.m_size)
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-        , m_generation(other.m_generation)
+        , m_iterator_list(other.m_iterator_list)
 #endif
     {
         other.m_pages = nullptr;
@@ -261,7 +261,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             m_page_capacity = other.m_page_capacity;
             m_size = other.m_size;
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-            m_generation = other.m_generation;
+            m_iterator_list = other.m_iterator_list;
 #endif
 
             other.m_pages = nullptr;
@@ -705,25 +705,71 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     size_type m_size;
     
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-    mutable size_type m_generation;
+    // Forward declaration for iterator debugging
+    struct iterator_node
+    {
+        const chunked_vector* container;
+        size_type index;
+        iterator_node* next;
+        
+        iterator_node() : container(nullptr), index(0), next(nullptr) {}
+    };
+    
+    // Iterator debugging support similar to Microsoft STL
+    mutable iterator_node* m_iterator_list;
     
     // Iterator debugging support methods
     void _invalidate_all_iterators() const noexcept
     {
-        ++m_generation;
+        // Mark all iterators as invalid by setting their container pointer to null
+        for (auto* node = m_iterator_list; node; node = node->next)
+        {
+            node->container = nullptr;
+        }
+        m_iterator_list = nullptr;
     }
     
     void _invalidate_iterators_at_or_after(size_type pos) const noexcept
     {
-        // For simplicity, we invalidate all iterators when any structural change occurs
-        // A more sophisticated implementation could track iterator positions
-        (void)pos; // Suppress unused parameter warning
-        ++m_generation;
+        // Mark iterators at or after position as invalid
+        auto** current = &m_iterator_list;
+        while (*current)
+        {
+            if ((*current)->index >= pos)
+            {
+                (*current)->container = nullptr;
+                auto* to_remove = *current;
+                *current = (*current)->next;
+                to_remove->next = nullptr;
+            }
+            else
+            {
+                current = &(*current)->next;
+            }
+        }
     }
     
-    size_type _get_generation() const noexcept
+    void _adopt_iterator(iterator_node* node) const noexcept
     {
-        return m_generation;
+        node->container = this;
+        node->next = m_iterator_list;
+        m_iterator_list = node;
+    }
+    
+    void _orphan_iterator(iterator_node* node) const noexcept
+    {
+        auto** current = &m_iterator_list;
+        while (*current)
+        {
+            if (*current == node)
+            {
+                *current = (*current)->next;
+                node->next = nullptr;
+                node->container = nullptr;
+                break;
+            }
+            current = &(*current)->next;
+        }
     }
 #endif
 
@@ -990,6 +1036,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
 
   public:
     template <typename ValueType> class basic_iterator
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+        : public iterator_node
+#endif
     {
       public:
         using iterator_category = std::forward_iterator_tag;
@@ -1002,35 +1051,108 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         friend class chunked_vector;
 
         basic_iterator() noexcept
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            : iterator_node()
+            , m_container(nullptr)
+#else
             : m_container(nullptr)
+#endif
             , m_index(0)
             , m_current_page(nullptr)
             , m_page_element_index(0)
-#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-            , m_generation(0)
-#endif
         {
         }
 
         basic_iterator(const chunked_vector* container, size_type index) noexcept
-            : m_container(container)
-            , m_index(index)
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-            , m_generation(container ? container->_get_generation() : 0)
+            : iterator_node()
+            , m_container(container)
+#else
+            : m_container(container)
 #endif
+            , m_index(index)
         {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            this->index = index;
+            if (container)
+            {
+                container->_adopt_iterator(this);
+            }
+#endif
+            update_page_cache();
+        }
+
+        basic_iterator(const basic_iterator& other) noexcept
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            : iterator_node()
+            , m_container(other.m_container)
+#else
+            : m_container(other.m_container)
+#endif
+            , m_index(other.m_index)
+        {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            this->index = other.index;
+            if (m_container)
+            {
+                m_container->_adopt_iterator(this);
+            }
+#endif
             update_page_cache();
         }
 
         template <typename U, typename = std::enable_if_t<std::is_const_v<ValueType> && !std::is_const_v<U>>>
         basic_iterator(const basic_iterator<U>& other) noexcept
-            : m_container(other.m_container)
-            , m_index(other.m_index)
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-            , m_generation(other.m_generation)
+            : iterator_node()
+            , m_container(other.m_container)
+#else
+            : m_container(other.m_container)
 #endif
+            , m_index(other.m_index)
         {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            this->index = other.index;
+            if (m_container)
+            {
+                m_container->_adopt_iterator(this);
+            }
+#endif
             update_page_cache();
+        }
+
+        ~basic_iterator()
+        {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            if (m_container)
+            {
+                m_container->_orphan_iterator(this);
+            }
+#endif
+        }
+
+        basic_iterator& operator=(const basic_iterator& other)
+        {
+            if (this != &other)
+            {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+                if (m_container)
+                {
+                    m_container->_orphan_iterator(this);
+                }
+#endif
+                m_container = other.m_container;
+                m_index = other.m_index;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+                this->index = other.index;
+                if (m_container)
+                {
+                    m_container->_adopt_iterator(this);
+                }
+#endif
+                update_page_cache();
+            }
+            return *this;
         }
 
         reference operator*() const
@@ -1060,6 +1182,10 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
 #endif
             ++m_index;
             ++m_page_element_index;
+            
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            this->index = m_index;
+#endif
             
             // Only update page cache if we've crossed a page boundary or reached the end
             if (m_page_element_index >= PAGE_SIZE) {
@@ -1095,9 +1221,8 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         size_type m_index;
         ValueType* m_current_page;
         size_type m_page_element_index;
-#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-        size_type m_generation;
         
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
         void _verify_valid(const char* file, int line) const
         {
             if (!m_container)
@@ -1106,9 +1231,8 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
                 return;
             }
             
-            if (m_generation != m_container->_get_generation())
+            if (this->container != m_container)
             {
-                // Iterator has been invalidated
                 CHUNKED_VEC_ASSERT(false && "Iterator has been invalidated");
                 return;
             }
