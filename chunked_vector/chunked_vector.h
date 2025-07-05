@@ -734,30 +734,26 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     // Iterator debugging support methods
     void _invalidate_all_iterators() const noexcept
     {
-        // Mark all iterators as invalid by setting their container pointer to null
-        for (auto* node = m_iterator_list; node; node = node->next)
-        {
+        auto* node = m_iterator_list;
+        m_iterator_list = nullptr;            // list becomes empty immediately
+        while (node) {
+            auto* next = node->next;          // store before we overwrite
             node->container = nullptr;
+            node->next      = nullptr;        // unlink
+            node            = next;
         }
-        m_iterator_list = nullptr;
     }
     
     void _invalidate_iterators_at_or_after(size_type pos) const noexcept
     {
-        // Mark iterators at or after position as invalid
-        auto** current = &m_iterator_list;
-        while (*current)
-        {
-            if ((*current)->index >= pos)
-            {
-                (*current)->container = nullptr;
-                auto* to_remove = *current;
-                *current = (*current)->next;
-                to_remove->next = nullptr;
-            }
-            else
-            {
-                current = &(*current)->next;
+        auto** pprev = &m_iterator_list;
+        while (auto* curr = *pprev) {
+            if (curr->index >= pos) {         // invalidate + unlink
+                *pprev          = curr->next; // cut from list
+                curr->container = nullptr;
+                curr->next      = nullptr;
+            } else {
+                pprev = &curr->next;          // keep, advance
             }
         }
     }
