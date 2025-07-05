@@ -189,7 +189,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         , m_page_capacity(other.m_page_capacity)
         , m_size(other.m_size)
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-        , m_iterator_list(other.m_iterator_list)
+        , m_iterator_list(nullptr)
 #endif
     {
         other.m_pages = nullptr;
@@ -197,13 +197,8 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         other.m_page_capacity = 0;
         other.m_size = 0;
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-        // Update all moved iterators to point to this container
-        for (auto* node = m_iterator_list; node; node = node->next)
-        {
-            node->container = this;
-        }
-        // Clear other's iterator list without invalidating (iterators now belong to this)
-        other.m_iterator_list = nullptr;
+        // Invalidate all iterators from both containers during move
+        other._invalidate_all_iterators();
 #endif
     }
 
@@ -266,23 +261,14 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             m_page_count = other.m_page_count;
             m_page_capacity = other.m_page_capacity;
             m_size = other.m_size;
-#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-            // Move iterator list and update container pointers
-            m_iterator_list = other.m_iterator_list;
-            // Update all moved iterators to point to this container
-            for (auto* node = m_iterator_list; node; node = node->next)
-            {
-                node->container = this;
-            }
-#endif
 
             other.m_pages = nullptr;
             other.m_page_count = 0;
             other.m_page_capacity = 0;
             other.m_size = 0;
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
-            // Clear other's iterator list without invalidating (iterators now belong to this)
-            other.m_iterator_list = nullptr;
+            // Invalidate all iterators from the source container during move
+            other._invalidate_all_iterators();
 #endif
         }
         return *this;
