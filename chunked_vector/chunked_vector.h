@@ -101,6 +101,21 @@ inline constexpr size_t safe_alignment_of = alignof(T) < alignof(void*) ? aligno
 namespace dod
 {
 
+/// @brief A chunked vector implementation that stores elements in fixed-size pages.
+/// @details This container provides O(1) random access while avoiding the memory
+/// fragmentation issues of std::vector when dealing with large amounts of data.
+/// Elements are stored in pages of fixed size, allowing for efficient memory usage
+/// and avoiding large contiguous memory allocations.
+///
+/// @tparam T The type of elements stored in the vector
+/// @tparam PAGE_SIZE The number of elements per page (default: 1024)
+///
+/// Key features:
+/// - O(1) random access via operator[] and at()
+/// - Efficient memory usage with page-based allocation
+/// - Iterator debugging support (similar to MSVC STL)
+/// - Optimized operations for trivial types
+/// - Custom allocator support via macros
 template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
 {
   public:
@@ -118,6 +133,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     using iterator = basic_iterator<T>;
     using const_iterator = basic_iterator<const T>;
 
+    /// @brief Returns the page size used by this container
     static constexpr size_t page_size() { return PAGE_SIZE; }
 
     chunked_vector() noexcept
@@ -459,36 +475,11 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     {
         if (count < m_size)
         {
-            if constexpr (!std::is_trivially_destructible_v<T>)
-            {
-                // Only call destructors for non-trivial types
-                // Optimize by iterating over pages, starting from the element at 'count'
-                size_type start_idx = count;
-                size_type elements_to_destroy = m_size - count;
-                
-                while (elements_to_destroy > 0)
-                {
-                    size_type page_idx = start_idx / PAGE_SIZE;
-                    size_type start_elem_idx = start_idx % PAGE_SIZE;
-                    size_type elements_in_page = PAGE_SIZE - start_elem_idx;
-                    size_type elements_to_destroy_in_page = std::min(elements_to_destroy, elements_in_page);
-                    
-                    T* page = m_pages[page_idx];
-                    for (size_type elem_idx = start_elem_idx; elem_idx < start_elem_idx + elements_to_destroy_in_page; ++elem_idx)
-                    {
-                        dod::destruct(&page[elem_idx]);
-                    }
-                    
-                    start_idx += elements_to_destroy_in_page;
-                    elements_to_destroy -= elements_to_destroy_in_page;
-                }
-            }
-            // For trivial types, no destructor calls needed
+            shrink_to_size(count);
         }
         else if (count > m_size)
         {
-            reserve(count);
-            bulk_construct_default(m_size, count);
+            expand_to_size(count);
         }
         m_size = count;
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
@@ -500,36 +491,11 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     {
         if (count < m_size)
         {
-            if constexpr (!std::is_trivially_destructible_v<T>)
-            {
-                // Only call destructors for non-trivial types
-                // Optimize by iterating over pages, starting from the element at 'count'
-                size_type start_idx = count;
-                size_type elements_to_destroy = m_size - count;
-                
-                while (elements_to_destroy > 0)
-                {
-                    size_type page_idx = start_idx / PAGE_SIZE;
-                    size_type start_elem_idx = start_idx % PAGE_SIZE;
-                    size_type elements_in_page = PAGE_SIZE - start_elem_idx;
-                    size_type elements_to_destroy_in_page = std::min(elements_to_destroy, elements_in_page);
-                    
-                    T* page = m_pages[page_idx];
-                    for (size_type elem_idx = start_elem_idx; elem_idx < start_elem_idx + elements_to_destroy_in_page; ++elem_idx)
-                    {
-                        dod::destruct(&page[elem_idx]);
-                    }
-                    
-                    start_idx += elements_to_destroy_in_page;
-                    elements_to_destroy -= elements_to_destroy_in_page;
-                }
-            }
-            // For trivial types, no destructor calls needed
+            shrink_to_size(count);
         }
         else if (count > m_size)
         {
-            reserve(count);
-            bulk_construct_with_value(m_size, count, value);
+            expand_to_size(count, value);
         }
         m_size = count;
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
@@ -703,6 +669,11 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     size_type m_page_capacity;
     size_type m_size;
     
+    // Constants for better readability
+    static constexpr size_type SAFETY_MARGIN = 16;
+    static constexpr size_type GROWTH_FACTOR_NUMERATOR = 3;
+    static constexpr size_type GROWTH_FACTOR_DENOMINATOR = 2;
+    
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
     // Forward declaration for iterator debugging
     struct iterator_node
@@ -768,7 +739,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     }
 #endif
 
-    // Helper function to count trailing zeros (C++17 compatible)
+    /// @brief Helper function to count trailing zeros (C++17 compatible)
+    /// @param value The value to count trailing zeros for
+    /// @return Number of trailing zeros, or 0 if value is 0
     static constexpr size_type count_trailing_zeros(size_type value) noexcept
     {
         if (value == 0) return 0;
@@ -781,43 +754,47 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         return count;
     }
 
-    // Helper function to calculate page and element indices from linear position
+    /// @brief Calculate page and element indices from linear position
+    /// @param pos Linear position in the container
+    /// @return Pair of (page_index, element_index_within_page)
     CHUNKED_VEC_INLINE std::pair<size_type, size_type> get_page_and_element_indices(size_type pos) const noexcept
     {
         // Optimize for power-of-2 page sizes using bit operations
         if constexpr ((PAGE_SIZE & (PAGE_SIZE - 1)) == 0) {
             // PAGE_SIZE is a power of 2, use fast bit operations
-            constexpr size_type page_size_bits = count_trailing_zeros(PAGE_SIZE);
-            return {pos >> page_size_bits, pos & (PAGE_SIZE - 1)};
+            constexpr size_type PAGE_SIZE_BITS = count_trailing_zeros(PAGE_SIZE);
+            return {pos >> PAGE_SIZE_BITS, pos & (PAGE_SIZE - 1)};
         } else {
             // Use regular division and modulo for non-power-of-2 sizes
             return {pos / PAGE_SIZE, pos % PAGE_SIZE};
         }
     }
 
-    // Get the maximum number of pages that can be allocated
+    /// @brief Get the maximum number of pages that can be allocated
     CHUNKED_VEC_INLINE size_type max_page_capacity() const noexcept
     {
-        // Maximum size_type value divided by pointer size, with some safety margin
-        const size_type max_pointers = std::numeric_limits<size_type>::max() / sizeof(T*);
-        // Leave some room for allocation headers and alignment
-        return max_pointers > 16 ? max_pointers - 16 : max_pointers;
+        // Maximum size_type value divided by pointer size, with safety margin
+        constexpr size_type MAX_POINTERS = std::numeric_limits<size_type>::max() / sizeof(T*);
+        // Leave room for allocation headers and alignment
+        return MAX_POINTERS > SAFETY_MARGIN ? MAX_POINTERS - SAFETY_MARGIN : MAX_POINTERS;
     }
 
-    // Calculate geometric growth similar to std::vector, but for pages
+    /// @brief Calculate geometric growth similar to std::vector, but for pages
+    /// @param pages_needed Minimum number of pages required
+    /// @return New page capacity using geometric growth (1.5x)
     CHUNKED_VEC_INLINE size_type calculate_page_growth(size_type pages_needed) const
     {
         const size_type old_capacity = m_page_capacity;
         const size_type max_capacity = max_page_capacity();
 
         // Handle overflow case: if old_capacity > max - old_capacity/2
-        if (old_capacity > max_capacity - old_capacity / 2)
+        if (old_capacity > max_capacity - old_capacity / GROWTH_FACTOR_DENOMINATOR)
         {
             return max_capacity; // geometric growth would overflow
         }
 
-        // Calculate geometric growth: old_capacity + old_capacity/2 (1.5x growth)
-        const size_type geometric = old_capacity + old_capacity / 2;
+        // Calculate geometric growth: old_capacity * 1.5 (3/2 growth factor)
+        const size_type geometric = old_capacity + old_capacity / GROWTH_FACTOR_DENOMINATOR;
 
         if (geometric < pages_needed)
         {
@@ -1029,6 +1006,50 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         m_size = other.m_size;
     }
 
+    // Helper function to shrink container to specified size
+    void shrink_to_size(size_type new_size)
+    {
+        if constexpr (!std::is_trivially_destructible_v<T>)
+        {
+            // Only call destructors for non-trivial types
+            // Optimize by iterating over pages, starting from the element at 'new_size'
+            size_type start_idx = new_size;
+            size_type elements_to_destroy = m_size - new_size;
+            
+            while (elements_to_destroy > 0)
+            {
+                size_type page_idx = start_idx / PAGE_SIZE;
+                size_type start_elem_idx = start_idx % PAGE_SIZE;
+                size_type elements_in_page = PAGE_SIZE - start_elem_idx;
+                size_type elements_to_destroy_in_page = std::min(elements_to_destroy, elements_in_page);
+                
+                T* page = m_pages[page_idx];
+                for (size_type elem_idx = start_elem_idx; elem_idx < start_elem_idx + elements_to_destroy_in_page; ++elem_idx)
+                {
+                    dod::destruct(&page[elem_idx]);
+                }
+                
+                start_idx += elements_to_destroy_in_page;
+                elements_to_destroy -= elements_to_destroy_in_page;
+            }
+        }
+        // For trivial types, no destructor calls needed
+    }
+
+    // Helper function to expand container to specified size with default values
+    void expand_to_size(size_type new_size)
+    {
+        reserve(new_size);
+        bulk_construct_default(m_size, new_size);
+    }
+
+    // Helper function to expand container to specified size with given value
+    void expand_to_size(size_type new_size, const T& value)
+    {
+        reserve(new_size);
+        bulk_construct_with_value(m_size, new_size, value);
+    }
+
   public:
     template <typename ValueType> class basic_iterator
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
@@ -1116,6 +1137,29 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             update_page_cache();
         }
 
+        basic_iterator(basic_iterator&& other) noexcept
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            : iterator_node()
+            , m_container(other.m_container)
+#else
+            : m_container(other.m_container)
+#endif
+            , m_index(other.m_index)
+        {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+            this->index = other.index;
+            if (m_container)
+            {
+                m_container->_adopt_iterator(this);
+                // Properly orphan the other iterator before moving
+                m_container->_orphan_iterator(&other);
+            }
+#endif
+            other.m_container = nullptr;
+            other.m_index = 0;
+            update_page_cache();
+        }
+
         ~basic_iterator()
         {
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
@@ -1145,6 +1189,34 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
                     m_container->_adopt_iterator(this);
                 }
 #endif
+                update_page_cache();
+            }
+            return *this;
+        }
+
+        basic_iterator& operator=(basic_iterator&& other) noexcept
+        {
+            if (this != &other)
+            {
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+                if (m_container)
+                {
+                    m_container->_orphan_iterator(this);
+                }
+#endif
+                m_container = other.m_container;
+                m_index = other.m_index;
+#if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
+                this->index = other.index;
+                if (m_container)
+                {
+                    m_container->_adopt_iterator(this);
+                    // Properly orphan the other iterator before moving
+                    m_container->_orphan_iterator(&other);
+                }
+#endif
+                other.m_container = nullptr;
+                other.m_index = 0;
                 update_page_cache();
             }
             return *this;
