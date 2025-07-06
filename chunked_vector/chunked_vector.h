@@ -669,6 +669,25 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     static constexpr size_type GROWTH_FACTOR_NUMERATOR = 3;
     static constexpr size_type GROWTH_FACTOR_DENOMINATOR = 2;
 
+    /// @brief Helper function to count trailing zeros (C++17 compatible)
+    /// @param value The value to count trailing zeros for
+    /// @return Number of trailing zeros, or 0 if value is 0
+    [[nodiscard]] static constexpr size_type count_trailing_zeros(size_type value) noexcept
+    {
+        if (value == 0)
+        {
+            return 0;
+        }
+
+        size_type count = 0;
+        while ((value & 1) == 0)
+        {
+            value >>= 1;
+            ++count;
+        }
+        return count;
+    }
+
     // Compile-time computed page size bits for power-of-2 optimization
     enum : size_type { PAGE_SIZE_BITS = count_trailing_zeros(PAGE_SIZE) };
 
@@ -746,25 +765,6 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         }
     }
 #endif
-
-    /// @brief Helper function to count trailing zeros (C++17 compatible)
-    /// @param value The value to count trailing zeros for
-    /// @return Number of trailing zeros, or 0 if value is 0
-    [[nodiscard]] static constexpr size_type count_trailing_zeros(size_type value) noexcept
-    {
-        if (value == 0)
-        {
-            return 0;
-        }
-
-        size_type count = 0;
-        while ((value & 1) == 0)
-        {
-            value >>= 1;
-            ++count;
-        }
-        return count;
-    }
 
     /// @brief Calculate the number of pages needed for a given element count
     /// @param element_count Number of elements to store
