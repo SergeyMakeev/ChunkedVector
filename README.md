@@ -63,6 +63,35 @@ The `chunked_vector` is a high-performance container that provides a `std::vecto
 - **Configurable page size** - Tune for specific use cases
 - **Iterator debugging** - Comprehensive iterator validation in debug builds
 
+## Key Advantages Over std::vector
+
+### Performance Benefits
+- **O(1) worst-case push_back()** - Unlike std::vector's O(1) amortized (no element copying during growth)
+- **Iterator stability** - push_back() never invalidates existing iterators
+- **Predictable performance** - No performance spikes from reallocation
+- **No element movement** - Existing elements never move during growth
+
+### Memory Benefits
+- **Reduced fragmentation** - Fixed-size page allocation
+- **Stable addresses** - Element addresses remain constant
+- **Efficient allocation** - Only allocate what you need, when you need it
+
+### Example Comparison
+
+```cpp
+// std::vector - potentially dangerous
+std::vector<int> std_vec = {1, 2, 3};
+auto it = std_vec.begin();
+std_vec.push_back(4);  // May invalidate 'it' if reallocation occurs
+// *it;  // Potentially undefined behavior
+
+// chunked_vector - always safe
+chunked_vector<int> chunked_vec = {1, 2, 3};
+auto it = chunked_vec.begin();
+chunked_vec.push_back(4);  // Never invalidates 'it'
+*it;  // Always safe - returns 1
+```
+
 ## Template Parameters
 
 ```cpp
@@ -325,7 +354,7 @@ int main() {
 |-----------|-----------------|-------|
 | `operator[]`, `at()` | O(1) | Optimized for power-of-2 page sizes |
 | `front()`, `back()` | O(1) | Direct access |
-| `push_back()`, `emplace_back()` | O(1) amortized | May allocate new page |
+| `push_back()`, `emplace_back()` | O(1) | May allocate new page |
 | `pop_back()` | O(1) | No reallocation |
 | `erase()` | O(n) | Elements need to be shifted |
 | `erase_unsorted()` | O(1) | Fast unordered removal |

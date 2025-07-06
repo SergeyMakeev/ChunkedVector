@@ -111,11 +111,18 @@ namespace dod
 /// Elements are stored in pages of fixed size, allowing for efficient memory usage
 /// and avoiding large contiguous memory allocations.
 ///
+/// Key advantages over std::vector:
+/// - O(1) worst-case push_back()/emplace_back() (vs O(1) amortized in std::vector)
+/// - Iterator stability: push_back() never invalidates existing iterators
+/// - No element movement during growth (unlike std::vector reallocation)
+/// - Predictable memory allocation patterns
+///
 /// @tparam T The type of elements stored in the vector
 /// @tparam PAGE_SIZE The number of elements per page (default: 1024)
 ///
 /// Key features:
 /// - O(1) random access via operator[] and at()
+/// - O(1) worst-case push_back() and emplace_back()
 /// - Efficient memory usage with page-based allocation
 /// - Iterator debugging support (similar to MSVC STL)
 /// - Optimized operations for trivial types
@@ -439,10 +446,24 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
 #endif
     }
 
+    /// @brief Add an element to the end of the container
+    /// @param value The value to add
+    /// @note Time complexity: O(1) worst-case (unlike std::vector which is O(1) amortized)
+    /// @note Never invalidates existing iterators
     CHUNKED_VEC_INLINE void push_back(const T& value) { emplace_back(value); }
 
+    /// @brief Add an element to the end of the container (move semantics)
+    /// @param value The value to add (will be moved)
+    /// @note Time complexity: O(1) worst-case (unlike std::vector which is O(1) amortized)
+    /// @note Never invalidates existing iterators
     CHUNKED_VEC_INLINE void push_back(T&& value) { emplace_back(std::move(value)); }
 
+    /// @brief Construct an element in-place at the end of the container
+    /// @param args Arguments to forward to the element's constructor
+    /// @return Reference to the constructed element
+    /// @note Time complexity: O(1) worst-case (unlike std::vector which is O(1) amortized)
+    /// @note Never invalidates existing iterators
+    /// @note May allocate a new page if current page is full
     template <typename... Args> CHUNKED_VEC_INLINE reference emplace_back(Args&&... args)
     {
         ensure_capacity_for_one_more();
@@ -881,6 +902,10 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         m_page_capacity = new_page_capacity;
     }
 
+    /// @brief Allocate a new page for storing elements
+    /// @param page_idx Index of the page to allocate
+    /// @note Time complexity: O(1) - just memory allocation, no element copying
+    /// @note Unlike std::vector reallocation, this never moves existing elements
     CHUNKED_VEC_INLINE void allocate_page(size_type page_idx)
     {
         CHUNKED_VEC_ASSERT(page_idx < m_page_capacity && "Page index out of capacity");
