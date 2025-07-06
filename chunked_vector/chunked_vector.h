@@ -44,6 +44,11 @@ inline size_t round_up_to_alignment(size_t size, size_t alignment) noexcept {
 #define CHUNKED_VEC_ASSERT(expression) assert(expression)
 #endif
 
+// Helper macro to suppress unused parameter warnings
+#if !defined(CHUNKED_VEC_MAYBE_UNUSED)
+    #define CHUNKED_VEC_MAYBE_UNUSED(x) (void)(x)
+#endif
+
 // Iterator debugging support similar to Microsoft STL
 // Users can override CHUNKED_VEC_ITERATOR_DEBUG_LEVEL to control iterator debugging
 #if !defined(CHUNKED_VEC_ITERATOR_DEBUG_LEVEL)
@@ -134,7 +139,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     using const_iterator = basic_iterator<const T>;
 
     /// @brief Returns the page size used by this container
-    static constexpr size_t page_size() { return PAGE_SIZE; }
+    [[nodiscard]] static constexpr size_t page_size() { return PAGE_SIZE; }
 
     chunked_vector() noexcept
         : m_pages(nullptr)
@@ -304,76 +309,78 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         return *this;
     }
 
-    CHUNKED_VEC_INLINE reference operator[](size_type pos)
+    [[nodiscard]] CHUNKED_VEC_INLINE reference operator[](size_type pos)
     {
         CHUNKED_VEC_ASSERT(pos < m_size && "Index out of range");
         auto [page_idx, elem_idx] = get_page_and_element_indices(pos);
         return m_pages[page_idx][elem_idx];
     }
 
-    CHUNKED_VEC_INLINE const_reference operator[](size_type pos) const
+    [[nodiscard]] CHUNKED_VEC_INLINE const_reference operator[](size_type pos) const
     {
         CHUNKED_VEC_ASSERT(pos < m_size && "Index out of range");
         auto [page_idx, elem_idx] = get_page_and_element_indices(pos);
         return m_pages[page_idx][elem_idx];
     }
 
-    CHUNKED_VEC_INLINE reference at(size_type pos)
+    [[nodiscard]] CHUNKED_VEC_INLINE reference at(size_type pos)
     {
         if (pos >= m_size)
         {
             throw std::out_of_range("chunked_vector::at: index out of range");
         }
-        return (*this)[pos];
+        auto [page_idx, elem_idx] = get_page_and_element_indices(pos);
+        return m_pages[page_idx][elem_idx];
     }
 
-    CHUNKED_VEC_INLINE const_reference at(size_type pos) const
+    [[nodiscard]] CHUNKED_VEC_INLINE const_reference at(size_type pos) const
     {
         if (pos >= m_size)
         {
             throw std::out_of_range("chunked_vector::at: index out of range");
         }
-        return (*this)[pos];
+        auto [page_idx, elem_idx] = get_page_and_element_indices(pos);
+        return m_pages[page_idx][elem_idx];
     }
 
-    CHUNKED_VEC_INLINE reference front()
+    [[nodiscard]] CHUNKED_VEC_INLINE reference front()
     {
         CHUNKED_VEC_ASSERT(m_size > 0 && "Cannot access front of empty chunked_vector");
         return m_pages[0][0];
     }
 
-    CHUNKED_VEC_INLINE const_reference front() const
+    [[nodiscard]] CHUNKED_VEC_INLINE const_reference front() const
     {
         CHUNKED_VEC_ASSERT(m_size > 0 && "Cannot access front of empty chunked_vector");
         return m_pages[0][0];
     }
 
-    CHUNKED_VEC_INLINE reference back()
+    [[nodiscard]] CHUNKED_VEC_INLINE reference back()
     {
         CHUNKED_VEC_ASSERT(m_size > 0 && "Cannot access back of empty chunked_vector");
         auto [last_page, last_elem] = get_page_and_element_indices(m_size - 1);
         return m_pages[last_page][last_elem];
     }
 
-    CHUNKED_VEC_INLINE const_reference back() const
+    [[nodiscard]] CHUNKED_VEC_INLINE const_reference back() const
     {
         CHUNKED_VEC_ASSERT(m_size > 0 && "Cannot access back of empty chunked_vector");
         auto [last_page, last_elem] = get_page_and_element_indices(m_size - 1);
         return m_pages[last_page][last_elem];
     }
 
-    CHUNKED_VEC_INLINE iterator begin() noexcept { return iterator(this, 0); }
-    CHUNKED_VEC_INLINE const_iterator begin() const noexcept { return const_iterator(this, 0); }
-    CHUNKED_VEC_INLINE const_iterator cbegin() const noexcept { return const_iterator(this, 0); }
+    [[nodiscard]] CHUNKED_VEC_INLINE iterator begin() noexcept { return iterator(this, 0); }
+    [[nodiscard]] CHUNKED_VEC_INLINE const_iterator begin() const noexcept { return const_iterator(this, 0); }
+    [[nodiscard]] CHUNKED_VEC_INLINE const_iterator cbegin() const noexcept { return const_iterator(this, 0); }
 
-    CHUNKED_VEC_INLINE iterator end() noexcept { return iterator(this, m_size); }
-    CHUNKED_VEC_INLINE const_iterator end() const noexcept { return const_iterator(this, m_size); }
-    CHUNKED_VEC_INLINE const_iterator cend() const noexcept { return const_iterator(this, m_size); }
+    [[nodiscard]] CHUNKED_VEC_INLINE iterator end() noexcept { return iterator(this, m_size); }
+    [[nodiscard]] CHUNKED_VEC_INLINE const_iterator end() const noexcept { return const_iterator(this, m_size); }
+    [[nodiscard]] CHUNKED_VEC_INLINE const_iterator cend() const noexcept { return const_iterator(this, m_size); }
 
-    CHUNKED_VEC_INLINE bool empty() const noexcept { return m_size == 0; }
-    CHUNKED_VEC_INLINE size_type size() const noexcept { return m_size; }
-    CHUNKED_VEC_INLINE size_type capacity() const noexcept { return m_page_count * PAGE_SIZE; }
-    CHUNKED_VEC_INLINE size_type max_size() const noexcept { return max_page_capacity() * PAGE_SIZE; }
+    [[nodiscard]] CHUNKED_VEC_INLINE bool empty() const noexcept { return m_size == 0; }
+    [[nodiscard]] CHUNKED_VEC_INLINE size_type size() const noexcept { return m_size; }
+    [[nodiscard]] CHUNKED_VEC_INLINE size_type capacity() const noexcept { return m_page_count * PAGE_SIZE; }
+    [[nodiscard]] CHUNKED_VEC_INLINE size_type max_size() const noexcept { return max_page_capacity() * PAGE_SIZE; }
 
     CHUNKED_VEC_INLINE void reserve(size_type new_capacity)
     {
@@ -382,7 +389,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
             return;
         }
 
-        size_type pages_needed = (new_capacity + PAGE_SIZE - 1) / PAGE_SIZE;
+        size_type pages_needed = calculate_pages_needed(new_capacity);
         ensure_page_capacity(pages_needed);
 
         for (size_type i = m_page_count; i < pages_needed; ++i)
@@ -393,11 +400,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
 
     void shrink_to_fit()
     {
-        size_type pages_needed = (m_size + PAGE_SIZE - 1) / PAGE_SIZE;
-        if (pages_needed == 0 && m_size == 0)
-        {
-            pages_needed = 0;
-        }
+        size_type pages_needed = calculate_pages_needed(m_size);
 
         for (size_type i = pages_needed; i < m_page_count; ++i)
         {
@@ -476,12 +479,13 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         if (count < m_size)
         {
             shrink_to_size(count);
+            m_size = count;
         }
         else if (count > m_size)
         {
             expand_to_size(count);
+            m_size = count;
         }
-        m_size = count;
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
         _invalidate_iterators_at_or_after(std::min(m_size, count));
 #endif
@@ -492,12 +496,13 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         if (count < m_size)
         {
             shrink_to_size(count);
+            m_size = count;
         }
         else if (count > m_size)
         {
             expand_to_size(count, value);
+            m_size = count;
         }
-        m_size = count;
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
         _invalidate_iterators_at_or_after(std::min(m_size, count));
 #endif
@@ -626,7 +631,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         return iterator(this, first_idx);
     }
 
-    iterator erase_unsorted(const_iterator pos)
+    [[nodiscard]] iterator erase_unsorted(const_iterator pos)
     {
         CHUNKED_VEC_VERIFY_ITERATOR(pos);
         CHUNKED_VEC_ASSERT(pos.m_container == this && "Iterator from different container");
@@ -742,7 +747,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     /// @brief Helper function to count trailing zeros (C++17 compatible)
     /// @param value The value to count trailing zeros for
     /// @return Number of trailing zeros, or 0 if value is 0
-    static constexpr size_type count_trailing_zeros(size_type value) noexcept
+    [[nodiscard]] static constexpr size_type count_trailing_zeros(size_type value) noexcept
     {
         if (value == 0) return 0;
         
@@ -754,10 +759,19 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         return count;
     }
 
+    /// @brief Calculate the number of pages needed for a given element count
+    /// @param element_count Number of elements to store
+    /// @return Number of pages needed
+    [[nodiscard]] CHUNKED_VEC_INLINE size_type calculate_pages_needed(size_type element_count) const noexcept
+    {
+        if (element_count == 0) return 0;
+        return (element_count + PAGE_SIZE - 1) / PAGE_SIZE;
+    }
+
     /// @brief Calculate page and element indices from linear position
     /// @param pos Linear position in the container
     /// @return Pair of (page_index, element_index_within_page)
-    CHUNKED_VEC_INLINE std::pair<size_type, size_type> get_page_and_element_indices(size_type pos) const noexcept
+    [[nodiscard]] CHUNKED_VEC_INLINE std::pair<size_type, size_type> get_page_and_element_indices(size_type pos) const noexcept
     {
         // Optimize for power-of-2 page sizes using bit operations
         if constexpr ((PAGE_SIZE & (PAGE_SIZE - 1)) == 0) {
@@ -771,7 +785,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     }
 
     /// @brief Get the maximum number of pages that can be allocated
-    CHUNKED_VEC_INLINE size_type max_page_capacity() const noexcept
+    [[nodiscard]] CHUNKED_VEC_INLINE size_type max_page_capacity() const noexcept
     {
         // Maximum size_type value divided by pointer size, with safety margin
         constexpr size_type MAX_POINTERS = std::numeric_limits<size_type>::max() / sizeof(T*);
@@ -782,7 +796,7 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     /// @brief Calculate geometric growth similar to std::vector, but for pages
     /// @param pages_needed Minimum number of pages required
     /// @return New page capacity using geometric growth (1.5x)
-    CHUNKED_VEC_INLINE size_type calculate_page_growth(size_type pages_needed) const
+    [[nodiscard]] CHUNKED_VEC_INLINE size_type calculate_page_growth(size_type pages_needed) const
     {
         const size_type old_capacity = m_page_capacity;
         const size_type max_capacity = max_page_capacity();
@@ -1310,8 +1324,8 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
                 return;
             }
             
-            (void)file; // Suppress unused parameter warning
-            (void)line; // Suppress unused parameter warning
+            CHUNKED_VEC_MAYBE_UNUSED(file);
+            CHUNKED_VEC_MAYBE_UNUSED(line);
         }
 #endif
 

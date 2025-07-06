@@ -307,8 +307,8 @@ TEST_F(ChunkedVectorTest, AtMethod)
         EXPECT_EQ(vec.at(i), i);
     }
 
-    EXPECT_THROW(vec.at(5), std::out_of_range);
-    EXPECT_THROW(vec.at(100), std::out_of_range);
+    EXPECT_THROW(CHUNKED_VEC_MAYBE_UNUSED(vec.at(5)), std::out_of_range);
+    EXPECT_THROW(CHUNKED_VEC_MAYBE_UNUSED(vec.at(100)), std::out_of_range);
 }
 
 TEST_F(ChunkedVectorTest, AtMethodConst)
@@ -325,7 +325,7 @@ TEST_F(ChunkedVectorTest, AtMethodConst)
         EXPECT_EQ(const_vec.at(i), i);
     }
 
-    EXPECT_THROW(const_vec.at(5), std::out_of_range);
+    EXPECT_THROW(CHUNKED_VEC_MAYBE_UNUSED(const_vec.at(5)), std::out_of_range);
 }
 
 TEST_F(ChunkedVectorTest, FrontAndBack)
