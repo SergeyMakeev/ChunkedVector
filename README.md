@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/SergeyMakeev/chunked_vector/graph/badge.svg?token=8B80XIGDVT)](https://codecov.io/gh/SergeyMakeev/chunked_vector)
 
 
-A high-performance, header-only C++17 chunked vector implementation with comprehensive testing.
+A high-performance, header-only C++17 chunked vector implementation with comprehensive testing and iterator debugging support.
 
 ## Features
 
@@ -15,6 +15,9 @@ A high-performance, header-only C++17 chunked vector implementation with compreh
 - **Comprehensive testing** - Extensive test suite with GoogleTest
 - **Memory efficient** - Chunked memory allocation strategy
 - **STL compatible** - Works with standard algorithms and iterators
+- **Iterator debugging** - Debug-level iterator validation similar to Microsoft STL
+- **Custom allocator support** - Override memory allocation via macros
+- **Performance optimized** - Optimized for power-of-2 page sizes and trivial types
 
 ## Build Status
 
@@ -58,6 +61,7 @@ The `chunked_vector` is a high-performance container that provides a `std::vecto
 - **Efficient growth** - No need to copy entire contents when expanding
 - **Cache-friendly access** - Elements within a page are contiguous
 - **Configurable page size** - Tune for specific use cases
+- **Iterator debugging** - Comprehensive iterator validation in debug builds
 
 ## Template Parameters
 
@@ -69,7 +73,7 @@ class chunked_vector;
 - **`T`** - The type of elements stored in the vector
 - **`PAGE_SIZE`** - Number of elements per page (default: 1024)
   - Must be greater than 0
-  - Power-of-2 values are optimized for better performance
+  - Power-of-2 values are optimized for better performance using bit operations
   - Recommended values: 256, 512, 1024, 2048, 4096
 
 ## API Documentation
@@ -323,7 +327,6 @@ int main() {
 | `front()`, `back()` | O(1) | Direct access |
 | `push_back()`, `emplace_back()` | O(1) amortized | May allocate new page |
 | `pop_back()` | O(1) | No reallocation |
-| `insert()` | O(n) | Elements need to be shifted |
 | `erase()` | O(n) | Elements need to be shifted |
 | `erase_unsorted()` | O(1) | Fast unordered removal |
 | `clear()` | O(n) for non-trivial types, O(1) for trivial | Destructor calls |
@@ -344,6 +347,22 @@ int main() {
 - **Geometric growth**: Page array grows similar to `std::vector`
 
 ## Configuration Options
+
+### Iterator Debugging
+
+The library includes comprehensive iterator debugging support similar to Microsoft STL's `_ITERATOR_DEBUG_LEVEL`:
+
+```cpp
+// Enable iterator debugging (default in debug builds)
+#define CHUNKED_VEC_ITERATOR_DEBUG_LEVEL 1
+#include "chunked_vector/chunked_vector.h"
+
+// Disable iterator debugging for maximum performance
+#define CHUNKED_VEC_ITERATOR_DEBUG_LEVEL 0
+#include "chunked_vector/chunked_vector.h"
+```
+
+See [ITERATOR_DEBUG_README.md](ITERATOR_DEBUG_README.md) for detailed information.
 
 ### Custom Memory Allocators
 
@@ -407,7 +426,9 @@ Pages:          [elem0...] [elem1024...] [elem2048...] [elem3072...]
 
 4. **Consider `erase_unsorted()`**: Much faster when element order doesn't matter
 
-5. **Profile your use case**: Test different page sizes to find the optimal value
+5. **Enable iterator debugging**: Use in development builds to catch iterator bugs
+
+6. **Profile your use case**: Test different page sizes to find the optimal value
 
 ## Building and Usage
 
@@ -433,16 +454,30 @@ cd build
 ctest --output-on-failure
 ```
 
-### Usage
+### Integration
 
-```
+```cmake
 # Add the chunked_vector library
 add_subdirectory("path_to_chunked_vector_repo/chunked_vector")
 
-# use chunked_vector library
+# Link to your target
 target_link_libraries(my_app_name PRIVATE chunked_vector)
 ```
 
+### Testing Iterator Debugging
+
+The project includes scripts to test iterator debugging at different levels:
+
+#### Windows
+```cmd
+test_iterator_debug_levels.cmd
+```
+
+#### Unix/Linux/macOS
+```bash
+chmod +x test_iterator_debug_levels.sh
+./test_iterator_debug_levels.sh
+```
 
 ## License
 
