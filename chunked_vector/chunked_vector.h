@@ -669,6 +669,9 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
     static constexpr size_type GROWTH_FACTOR_NUMERATOR = 3;
     static constexpr size_type GROWTH_FACTOR_DENOMINATOR = 2;
 
+    // Compile-time computed page size bits for power-of-2 optimization
+    enum : size_type { PAGE_SIZE_BITS = count_trailing_zeros(PAGE_SIZE) };
+
 #if CHUNKED_VEC_ITERATOR_DEBUG_LEVEL > 0
     // Forward declaration for iterator debugging
     struct iterator_node
@@ -784,7 +787,6 @@ template <typename T, size_t PAGE_SIZE = 1024> class chunked_vector
         if constexpr ((PAGE_SIZE & (PAGE_SIZE - 1)) == 0)
         {
             // PAGE_SIZE is a power of 2, use fast bit operations
-            constexpr size_type PAGE_SIZE_BITS = count_trailing_zeros(PAGE_SIZE);
             return {pos >> PAGE_SIZE_BITS, pos & (PAGE_SIZE - 1)};
         }
         else
