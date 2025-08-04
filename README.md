@@ -1,8 +1,8 @@
-# chunked_vector
+# Chunked Vector
 
-[![License](https://img.shields.io/github/license/SergeyMakeev/chunked_vector)](LICENSE)
-[![Language](https://img.shields.io/github/languages/top/SergeyMakeev/chunked_vector)](https://github.com/SergeyMakeev/chunked_vector)
-[![codecov](https://codecov.io/gh/SergeyMakeev/chunked_vector/graph/badge.svg?token=8B80XIGDVT)](https://codecov.io/gh/SergeyMakeev/chunked_vector)
+[![License](https://img.shields.io/github/license/SergeyMakeev/ChunkedVector)](LICENSE)
+[![Language](https://img.shields.io/github/languages/top/SergeyMakeev/ChunkedVector)](https://github.com/SergeyMakeev/ChunkedVector)
+[![codecov](https://codecov.io/gh/SergeyMakeev/ChunkedVector/graph/badge.svg?token=8B80XIGDVT)](https://codecov.io/gh/SergeyMakeev/ChunkedVector)
 
 
 A high-performance, header-only C++17 chunked vector implementation with comprehensive testing and iterator debugging support.
@@ -23,12 +23,12 @@ A high-performance, header-only C++17 chunked vector implementation with compreh
 
 Each badge above represents a different aspect of our continuous integration:
 
-[![Linux GCC](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-gcc.yml)  
-[![Linux Clang](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/linux-clang.yml)  
-[![macOS](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/macos.yml)  
-[![Windows](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/windows.yml)  
-[![Coverage](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/coverage.yml)  
-[![Sanitizers](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/chunked_vector/actions/workflows/sanitizers.yml)  
+[![Linux GCC](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/linux-gcc.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/linux-gcc.yml)  
+[![Linux Clang](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/linux-clang.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/linux-clang.yml)  
+[![macOS](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/macos.yml)  
+[![Windows](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/windows.yml)  
+[![Coverage](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/coverage.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/coverage.yml)  
+[![Sanitizers](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/sanitizers.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/ChunkedVector/actions/workflows/sanitizers.yml)  
 
 ## Quick Start
 
@@ -471,8 +471,8 @@ Pages:          [elem0...] [elem1024...] [elem2048...] [elem3072...]
 
 ```bash
 # Clone the repository
-git clone https://github.com/SergeyMakeev/chunked_vector.git
-cd chunked_vector
+git clone https://github.com/SergeyMakeev/ChunkedVector.git
+cd ChunkedVector
 
 # Configure and build
 cmake -B build -DCMAKE_BUILD_TYPE=Release

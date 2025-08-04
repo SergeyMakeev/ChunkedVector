@@ -59,10 +59,5 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: SergeyMakeev/chunked_vector
           files: ./coverage_filtered.info
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
+          fail_ci_if_error: true
           disable_search: true
-          override_branch: ${{ github.ref_name }}
-          override_build: ${{ github.run_number }}
-          override_commit: ${{ github.sha }} 
